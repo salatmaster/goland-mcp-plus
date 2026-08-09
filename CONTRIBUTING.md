@@ -64,6 +64,15 @@ The direction of dependency is one way: `toolset` may use `go`, `go` may not use
 - **Never swallow cancellation.** `runCatchingCancellable` exists for this;
   `ProcessCanceledException` extends `CancellationException`.
 
+## Keep the plugin dynamic
+
+`DynamicPluginTest` asserts that the plugin loads, unloads and reloads without an IDE
+restart. The IDE grants that only while every extension point in use is declared
+`dynamic` and the plugin declares no components. Nothing warns you at build time if a
+new extension breaks it — users simply start getting a restart prompt on every update.
+Before adding an extension, check that its extension point is declared `dynamic="true"`
+in the platform or in the plugin that owns it.
+
 ## Error messages
 
 The caller is a model. An error that says only what is wrong leaves it guessing at

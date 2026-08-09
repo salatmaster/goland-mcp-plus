@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A test that fails if the plugin ever stops loading and unloading dynamically.
+  Installing, updating and removing it need no IDE restart, and nothing else warns
+  you at build time when a new extension takes that away.
+
 ## [0.1.0] - 2026-08-10
 
 ### Added

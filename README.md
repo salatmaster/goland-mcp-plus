@@ -124,6 +124,9 @@ are the shapes models actually send.
 From the JetBrains Marketplace: **Settings | Plugins | Marketplace**, search for
 **Go MCP++**.
 
+Installing, updating and removing it need **no IDE restart** — every extension point
+it uses is a dynamic one, and a test fails if that ever stops being true.
+
 Or build it:
 
 ```bash
