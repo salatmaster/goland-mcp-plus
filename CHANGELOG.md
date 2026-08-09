@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-08-10
+
 ### Added
 
 - 24 Go tools over the IDE's MCP server, in five groups: understanding code,
@@ -27,3 +29,6 @@ All notable changes to this project are documented here. The format follows
 - `go_extract_function` — the IDE's handler needs an editor and an inplace naming
   template, which a tool call cannot answer. See the README.
 - A tool filter UI — the IDE ships one, and these tools appear in it.
+
+[unreleased]: https://github.com/salatmaster/goland-mcp-plus/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/salatmaster/goland-mcp-plus/releases/tag/v0.1.0
