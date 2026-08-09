@@ -3,7 +3,7 @@ import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 plugins {
     id("org.jetbrains.kotlin.jvm") version "2.3.10"
     id("org.jetbrains.kotlin.plugin.serialization") version "2.3.10"
-    id("org.jetbrains.intellij.platform") version "2.12.0"
+    id("org.jetbrains.intellij.platform") version "2.18.1"
 }
 
 group = "io.github.salatmaster"
