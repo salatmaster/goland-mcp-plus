@@ -60,6 +60,9 @@ class GoSymbolsImpl(
             )
         }
 
+    override fun declaration(project: Project, ref: SymbolRef): GoNamedElement? =
+        guardGoApi("declaration") { lookupElement(project, ref) }
+
     private fun lookupElement(project: Project, ref: SymbolRef): GoNamedElement? {
         val scope = GlobalSearchScope.allScope(project)
         val candidates = when (ref) {
