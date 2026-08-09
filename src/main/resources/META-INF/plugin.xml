@@ -14,5 +14,6 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <mcpServer.mcpToolset implementation="dev.salatmaster.golandmcp.toolset.SymbolToolset"/>
+        <mcpServer.mcpToolset implementation="dev.salatmaster.golandmcp.toolset.InterfaceToolset"/>
     </extensions>
 </idea-plugin>
