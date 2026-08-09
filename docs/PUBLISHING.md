@@ -46,8 +46,10 @@ plugin with that version, and creates a GitHub release with the zip attached and
 generated notes. Publishing to the Marketplace is a further step, gated behind the
 `PUBLISH_TO_MARKETPLACE` repository variable, so tagging alone never publishes.
 
-A tag that is not `vMAJOR.MINOR.PATCH` fails the workflow rather than producing a
-release with a nonsense version.
+A tag that does not start with `vMAJOR.MINOR.PATCH` fails the workflow rather than
+producing a release with a nonsense version. A pre-release suffix (`v1.2.3-rc.1`) and
+the four-component form the Marketplace also accepts (`v1.2.3.4`) both pass; `nightly`
+and `v1.2` do not.
 
 ## MCP directories
 
