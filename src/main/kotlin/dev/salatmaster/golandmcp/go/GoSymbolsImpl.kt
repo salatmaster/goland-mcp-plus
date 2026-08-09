@@ -13,6 +13,7 @@ import com.intellij.psi.PsiWhiteSpace
 import com.intellij.psi.search.GlobalSearchScope
 import dev.salatmaster.golandmcp.common.SymbolRef
 import dev.salatmaster.golandmcp.common.formatLocation
+import dev.salatmaster.golandmcp.common.projectFirst
 
 class GoSymbolsImpl : GoSymbols {
 
@@ -25,10 +26,14 @@ class GoSymbolsImpl : GoSymbols {
             is SymbolRef.AtPosition -> emptyList()
         }
 
-        when (candidates.size) {
+        // Project code first: a bare name like `Rect` also matches image, cmplx and
+        // windows once the Go SDK is indexed, and the stub index order is arbitrary.
+        val ranked = candidates.projectFirst(project)
+
+        when (ranked.size) {
             0 -> GoLookupResult.NotFound
-            1 -> GoLookupResult.Found(describe(project, candidates.single()))
-            else -> GoLookupResult.Ambiguous(candidates.map { describe(project, it) })
+            1 -> GoLookupResult.Found(describe(project, ranked.single()))
+            else -> GoLookupResult.Ambiguous(ranked.map { describe(project, it) })
         }
     }
 

@@ -10,6 +10,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.stubs.StubIndex
 import dev.salatmaster.golandmcp.common.formatLocation
+import dev.salatmaster.golandmcp.common.projectFirst
 
 class GoInterfaceFactsImpl : GoInterfaceFacts {
 
@@ -96,17 +97,24 @@ class GoInterfaceFactsImpl : GoInterfaceFacts {
             .flatMap { GoMethodFingerprintIndex.find(it, project, scope, null).asSequence() }
             .mapNotNull { it.resolveTypeSpec() }
             .toList()
+            .projectFirst(project)
     }
 
+    /**
+     * Project declarations win over SDK ones. `Reader` matches io, bufio, csv and more once
+     * the Go SDK is indexed, and answering about the wrong one is worse than answering slowly.
+     */
     private fun findType(project: Project, scope: GlobalSearchScope, name: String): GoTypeSpec? =
-        GoTypesIndex.find(name, project, scope, null).firstOrNull()
+        GoTypesIndex.find(name, project, scope, null).toList().projectFirst(project).firstOrNull()
 
     private fun findInterfaceSpec(
         project: Project,
         scope: GlobalSearchScope,
         name: String,
     ): GoTypeSpec? = GoTypesIndex.find(name, project, scope, null)
-        .firstOrNull { it.specType?.type is GoInterfaceType }
+        .filter { it.specType?.type is GoInterfaceType }
+        .projectFirst(project)
+        .firstOrNull()
 
     /**
      * Compares the interface's full method set (embedding included) against the type's own

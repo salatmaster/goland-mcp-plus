@@ -26,8 +26,10 @@ data class GoImplementationEntry(
 data class GoImplementationsResult(
     val interfaceName: String,
     val implementations: List<GoImplementationEntry>,
+    /** True when more implementations exist than were returned. */
     val truncated: Boolean,
-    val omitted: Int,
+    /** How to narrow or widen the query; empty when the list is complete. */
+    val hint: String,
 )
 
 @Serializable
@@ -87,6 +89,10 @@ class InterfaceToolset : McpToolset {
             )
         }
 
+        // Deliberately no count of what was dropped. The search stops at limit + 1, so any
+        // such number would always be 1 — for a widely implemented interface like io.Reader
+        // that would report "1 more" when hundreds remain. Stating the fact and how to act on
+        // it beats stating a confident falsehood.
         val truncated = found.size > limit
         return GoImplementationsResult(
             interfaceName = interfaceName,
@@ -100,7 +106,12 @@ class InterfaceToolset : McpToolset {
                 )
             },
             truncated = truncated,
-            omitted = if (truncated) found.size - limit else 0,
+            hint = if (truncated) {
+                "More implementations exist than were returned; the count is unknown. " +
+                    "Project types are listed first. Raise limit to see more."
+            } else {
+                ""
+            },
         )
     }
 

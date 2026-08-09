@@ -19,16 +19,19 @@ class InterfaceToolsetTest : GoMcpToolTestCase() {
         assertTrue(result.implementations.single { it.typeName == "Circle" }.requiresPointer)
         assertFalse(result.implementations.single { it.typeName == "Rect" }.requiresPointer)
         assertFalse(result.truncated)
-        assertEquals(0, result.omitted)
+        assertTrue("a complete list needs no hint", result.hint.isEmpty())
     }
 
-    fun `test truncates and reports how many were omitted`() {
+    fun `test truncation is flagged with actionable advice`() {
         loadFixture("basic")
         val result = callTool { toolset.implementations(project, "Shape", limit = 1) }
 
         assertEquals(1, result.implementations.size)
         assertTrue(result.truncated)
-        assertEquals(1, result.omitted)
+        assertTrue(
+            "truncation should say how to see more, was: ${result.hint}",
+            result.hint.contains("limit"),
+        )
     }
 
     fun `test rejects a non positive limit`() {
