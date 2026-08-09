@@ -1,0 +1,14 @@
+<idea-plugin>
+    <id>io.github.salatmaster.goland-mcp-plus</id>
+    <name>GoLand MCP+</name>
+    <vendor url="https://github.com/salatmaster/goland-mcp-plus">salatmaster</vendor>
+    <description><![CDATA[
+        Extends the built-in JetBrains MCP server with Go semantic tools:
+        interface implementations, interface satisfaction diagnostics, and
+        symbol lookup by human-readable reference.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.mcpServer</depends>
+    <depends>org.jetbrains.plugins.go</depends>
+</idea-plugin>
