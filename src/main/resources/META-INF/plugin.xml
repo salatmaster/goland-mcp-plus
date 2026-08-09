@@ -11,4 +11,8 @@
     <depends>com.intellij.modules.platform</depends>
     <depends>com.intellij.mcpServer</depends>
     <depends>org.jetbrains.plugins.go</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <mcpServer.mcpToolset implementation="dev.salatmaster.golandmcp.toolset.SymbolToolset"/>
+    </extensions>
 </idea-plugin>
