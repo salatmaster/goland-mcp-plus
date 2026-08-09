@@ -12,6 +12,7 @@ import dev.salatmaster.golandmcp.common.resolveFile
 import dev.salatmaster.golandmcp.common.unifiedDiff
 import dev.salatmaster.golandmcp.common.writeToDocument
 import dev.salatmaster.golandmcp.go.GoGeneration
+import dev.salatmaster.golandmcp.go.GoMethodRequirement
 import dev.salatmaster.golandmcp.go.GoImportsImpl
 import dev.salatmaster.golandmcp.go.GoInterfaceFactsImpl
 import dev.salatmaster.golandmcp.go.GoSymbolsImpl
@@ -103,6 +104,79 @@ class GenerationToolset : McpToolset {
 
         return appendToFile(project, path, code)
             .withSuccessHint("Appended ${satisfaction.missingSignatures.size} stub(s).")
+    }
+
+    @McpTool
+    @McpDescription(
+        "Extract an interface from a Go type's methods, with the signatures the type " +
+            "actually declares. By default only exported methods are included, since " +
+            "unexported ones cannot be satisfied from another package. Note this generates " +
+            "the interface; it does not rewrite existing uses of the type to refer to it.",
+    )
+    suspend fun go_extract_interface(
+        @McpDescription("Type to extract from, e.g. 'Rect'")
+        typeName: String,
+        @McpDescription("Name for the new interface, e.g. 'Shaper'")
+        interfaceName: String,
+        @McpDescription("Method names to include; empty means every exported method")
+        methodNames: List<String>,
+        @McpDescription("File to append the interface to, relative to the project root; empty to only return it")
+        path: String,
+    ): GoGeneratedCode = extractInterface(
+        currentCoroutineContext().project, typeName, interfaceName, methodNames, path,
+    )
+
+    /** Testable core; the project is explicit so tests need no MCP call context. */
+    internal suspend fun extractInterface(
+        project: Project,
+        typeName: String,
+        interfaceName: String,
+        methodNames: List<String>,
+        path: String,
+    ): GoGeneratedCode {
+        if (interfaceName.isBlank()) mcpFail("interfaceName must not be blank")
+
+        val declared = readAction { facts.methodsOf(project, typeName) }
+        if (declared.isEmpty()) {
+            mcpFail(
+                "No type named '$typeName' was found, or it declares no methods. " +
+                    "An interface can only be extracted from a type that has some.",
+            )
+        }
+
+        val selected: List<GoMethodRequirement> = if (methodNames.isEmpty()) {
+            declared.filter { it.name.firstOrNull()?.isUpperCase() == true }
+        } else {
+            val known = declared.associateBy { it.name }
+            val missing = methodNames.filterNot { known.containsKey(it) }
+            if (missing.isNotEmpty()) {
+                mcpFail(
+                    "$typeName has no method(s) named ${missing.joinToString(", ")}. " +
+                        "It declares: ${declared.joinToString(", ") { it.name }}.",
+                )
+            }
+            methodNames.mapNotNull { known[it] }
+        }
+
+        if (selected.isEmpty()) {
+            mcpFail(
+                "$typeName declares no exported methods, so the interface would be empty. " +
+                    "Name the methods explicitly if you meant to include unexported ones.",
+            )
+        }
+
+        val code = GoGeneration.interfaceDeclaration(
+            interfaceName,
+            selected,
+            "$interfaceName is the behaviour extracted from $typeName.",
+        )
+
+        return if (path.isBlank()) {
+            GoGeneratedCode(code, "", false, "", "Pass a path to append this interface.")
+        } else {
+            appendToFile(project, path, code)
+                .withSuccessHint("Extracted ${selected.size} method(s) into $interfaceName.")
+        }
     }
 
     @McpTool

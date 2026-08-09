@@ -52,6 +52,12 @@ interface GoInterfaceFacts {
     fun implementors(project: Project, interfaceName: String, limit: Int): List<GoImplementor>
 
     /**
+     * The methods declared on a type, with signatures — the input for extracting an
+     * interface from it.
+     */
+    fun methodsOf(project: Project, typeName: String): List<GoMethodRequirement>
+
+    /**
      * The interfaces a type satisfies — the reverse of [implementors].
      *
      * Empty interfaces are excluded: everything satisfies them, so listing them is noise.

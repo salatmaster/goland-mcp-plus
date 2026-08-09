@@ -103,4 +103,40 @@ class GenerationToolsetTest : GoMcpToolTestCase() {
         assertFalse(result.applied)
         assertTrue(result.hint.contains("not found"))
     }
+
+    fun `test extracts an interface from exported methods`() {
+        loadFixture("basic")
+        val result = callTool { toolset.extractInterface(project, "Rect", "Shaper", emptyList(), "") }
+
+        assertTrue(result.code, result.code.contains("type Shaper interface"))
+        assertTrue(result.code, result.code.contains("Area() float64"))
+        assertTrue(result.code, result.code.contains("Name() string"))
+    }
+
+    fun `test extracts only the named methods`() {
+        loadFixture("basic")
+        val result = callTool { toolset.extractInterface(project, "Rect", "Areaer", listOf("Area"), "") }
+
+        assertTrue(result.code, result.code.contains("Area() float64"))
+        assertFalse("Name was not requested, was: ${result.code}", result.code.contains("Name() string"))
+    }
+
+    fun `test rejects a method the type does not have`() {
+        loadFixture("basic")
+        val error = org.junit.Assert.assertThrows(Exception::class.java) {
+            callTool { toolset.extractInterface(project, "Rect", "X", listOf("Nope"), "") }
+        }
+        assertTrue(
+            "error should list what the type does declare, was: ${error.message}",
+            error.message!!.contains("Nope") && error.message!!.contains("Area"),
+        )
+    }
+
+    fun `test rejects a type with no methods`() {
+        loadFixture("basic")
+        val error = org.junit.Assert.assertThrows(Exception::class.java) {
+            callTool { toolset.extractInterface(project, "User", "X", emptyList(), "") }
+        }
+        assertTrue(error.message!!.contains("no methods"))
+    }
 }

@@ -83,6 +83,25 @@ class GoInterfaceFactsImpl : GoInterfaceFacts {
         found.values.toList()
     }
 
+    override fun methodsOf(
+        project: Project,
+        typeName: String,
+    ): List<GoMethodRequirement> = guardGoApi("methods of") {
+        val scope = GlobalSearchScope.allScope(project)
+        val type = findType(project, scope, typeName) ?: return@guardGoApi emptyList()
+
+        type.methods.mapNotNull { method ->
+            val name = method.name ?: return@mapNotNull null
+            GoMethodRequirement(
+                name = name,
+                signature = signatureShape(method.signature)
+                    .let { method.signature?.text?.replace(Regex("\\s+"), " ")?.trim().orEmpty() },
+                satisfiedBy = null,
+                pointerReceiverOnly = isPointerReceiver(method),
+            )
+        }
+    }
+
     /**
      * The interfaces a type satisfies.
      *

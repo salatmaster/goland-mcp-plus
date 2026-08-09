@@ -39,6 +39,26 @@ object GoGeneration {
     }
 
     /**
+     * Renders an interface declaration covering [requirements].
+     *
+     * Only exported methods are worth putting in an interface by default; unexported ones
+     * cannot be satisfied from another package at all.
+     */
+    fun interfaceDeclaration(
+        interfaceName: String,
+        requirements: List<GoMethodRequirement>,
+        doc: String,
+    ): String {
+        val methods = requirements.joinToString("\n") { "\t${it.name}${it.signature}" }
+        return buildString {
+            if (doc.isNotBlank()) appendLine("// $doc")
+            append("type $interfaceName interface {\n")
+            append(methods)
+            append("\n}")
+        }
+    }
+
+    /**
      * Renders a table-driven test skeleton for a function.
      *
      * Table-driven is the idiom Go reviewers expect, and starting from the shape means the

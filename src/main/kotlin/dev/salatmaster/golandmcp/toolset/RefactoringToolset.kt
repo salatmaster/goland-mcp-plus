@@ -11,13 +11,11 @@ import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiDirectory
 import com.intellij.psi.PsiManager
 import com.intellij.refactoring.move.moveFilesOrDirectories.MoveFilesOrDirectoriesProcessor
-import com.intellij.refactoring.safeDelete.SafeDeleteProcessor
 import dev.salatmaster.golandmcp.common.SymbolRefParseException
 import dev.salatmaster.golandmcp.common.parseSymbolRef
 import dev.salatmaster.golandmcp.common.resolveFile
-import com.goide.psi.GoFunctionOrMethodDeclaration
-import com.goide.refactor.inline.function.GoInlineFunctionProcessor
-import dev.salatmaster.golandmcp.go.GoSymbolsImpl
+import dev.salatmaster.golandmcp.go.GoRefactoringOutcome
+import dev.salatmaster.golandmcp.go.GoRefactoringsImpl
 import dev.salatmaster.golandmcp.go.GoUsagesImpl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -58,8 +56,8 @@ data class GoMoveFilesResult(
 
 class RefactoringToolset : McpToolset {
 
-    private val symbols = GoSymbolsImpl()
     private val usages = GoUsagesImpl()
+    private val refactorings = GoRefactoringsImpl()
 
     @McpTool
     @McpDescription(
@@ -87,9 +85,6 @@ class RefactoringToolset : McpToolset {
             mcpFail(e.message ?: "Could not parse '$reference'")
         }
 
-        val element = readAction { symbols.declaration(project, ref) }
-            ?: mcpFail("No Go symbol matches '$reference'.")
-
         // Check usages ourselves first: the platform processor would otherwise pop a
         // conflicts dialog, which cannot be answered from here.
         val found = readAction { usages.find(project, ref, testUsagesBlock, BLOCKING_LIMIT) }
@@ -110,24 +105,14 @@ class RefactoringToolset : McpToolset {
             )
         }
 
-        return withContext(Dispatchers.EDT) {
-            runCatching {
-                // BaseRefactoringProcessor manages its own write action, so it must not be
-                // wrapped in one.
-                SafeDeleteProcessor
-                    .createInstance(project, null, arrayOf(element), false, false, true)
-                    .run()
-            }.fold(
-                onSuccess = {
-                    GoSafeDeleteResult(reference, true, emptyList(), "")
-                },
-                onFailure = { error ->
-                    GoSafeDeleteResult(
-                        reference, false, emptyList(),
-                        "The refactoring failed: ${error::class.simpleName}: ${error.message}",
-                    )
-                },
-            )
+        return when (val outcome = withContext(Dispatchers.EDT) {
+            refactorings.safeDelete(project, ref)
+        }) {
+            GoRefactoringOutcome.Done -> GoSafeDeleteResult(reference, true, emptyList(), "")
+            is GoRefactoringOutcome.NotApplicable ->
+                mcpFail("Cannot delete '$reference': ${outcome.reason}.")
+            is GoRefactoringOutcome.Failed ->
+                GoSafeDeleteResult(reference, false, emptyList(), "The refactoring failed: ${outcome.reason}")
         }
     }
 
@@ -157,31 +142,13 @@ class RefactoringToolset : McpToolset {
             mcpFail(e.message ?: "Could not parse '$reference'")
         }
 
-        val declaration = readAction { symbols.declaration(project, ref) }
-            ?: mcpFail("No Go symbol matches '$reference'.")
-
-        val function = declaration as? GoFunctionOrMethodDeclaration
-            ?: mcpFail(
-                "'$reference' is a ${declaration::class.simpleName}, not a function or method; " +
-                    "only those can be inlined.",
-            )
-
-        return withContext(Dispatchers.EDT) {
-            runCatching {
-                // Null reference means "inline every call site" rather than one occurrence.
-                // BaseRefactoringProcessor runs its own write action.
-                GoInlineFunctionProcessor(project, function, null, false, removeDeclaration).run()
-            }.fold(
-                onSuccess = {
-                    GoInlineResult(reference, true, removeDeclaration, "")
-                },
-                onFailure = { error ->
-                    GoInlineResult(
-                        reference, false, false,
-                        "Inlining failed: ${error::class.simpleName}: ${error.message}",
-                    )
-                },
-            )
+        return when (val outcome = withContext(Dispatchers.EDT) {
+            refactorings.inlineFunction(project, ref, removeDeclaration)
+        }) {
+            GoRefactoringOutcome.Done -> GoInlineResult(reference, true, removeDeclaration, "")
+            is GoRefactoringOutcome.NotApplicable -> mcpFail("Cannot inline '$reference': ${outcome.reason}.")
+            is GoRefactoringOutcome.Failed ->
+                GoInlineResult(reference, false, false, "Inlining failed: ${outcome.reason}")
         }
     }
 
