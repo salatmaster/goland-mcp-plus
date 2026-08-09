@@ -1,6 +1,6 @@
 <idea-plugin>
     <id>io.github.salatmaster.goland-mcp-plus</id>
-    <name>GoLand MCP+</name>
+    <name>Go MCP++</name>
     <vendor url="https://github.com/salatmaster/goland-mcp-plus">salatmaster</vendor>
     <description><![CDATA[
         Extends the built-in JetBrains MCP server with Go semantic tools:

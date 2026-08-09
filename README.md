@@ -1,6 +1,9 @@
-# GoLand MCP+
+# Go MCP++
 
 Go semantic tools for the MCP server built into GoLand.
+
+> The plugin is listed as **Go MCP++** on the JetBrains Marketplace: plugin names may not
+> contain the word "GoLand". The repository keeps its original name.
 
 GoLand already exposes file reading, text search, and patching over MCP. What it does not
 expose is the Go type system — so an agent cannot ask who implements an interface, or why a

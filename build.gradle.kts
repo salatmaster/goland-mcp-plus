@@ -30,7 +30,9 @@ dependencies {
     testImplementation(kotlin("reflect"))
 }
 
-kotlin { jvmToolchain(21) }
+// IntelliJ Platform 2026.2 runs on Java 25; building against 21 risks
+// missing or mis-resolved platform APIs.
+kotlin { jvmToolchain(25) }
 
 intellijPlatform {
     // The plugin contributes no settings UI yet; building searchable options
@@ -40,7 +42,11 @@ intellijPlatform {
     pluginConfiguration {
         ideaVersion {
             sinceBuild = "262"
-            untilBuild = "262.*"
+            // No until-build: pinning it would make the plugin uninstallable the moment
+            // users update their IDE. The guardGoApi layer already turns an incompatible
+            // com.goide API into a readable tool error naming the build, which is the
+            // failure mode until-build was meant to prevent.
+            untilBuild = provider { null }
         }
     }
 }
