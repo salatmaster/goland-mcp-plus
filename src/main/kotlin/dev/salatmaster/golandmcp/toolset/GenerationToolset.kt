@@ -12,6 +12,7 @@ import dev.salatmaster.golandmcp.common.resolveFile
 import dev.salatmaster.golandmcp.common.unifiedDiff
 import dev.salatmaster.golandmcp.common.writeToDocument
 import dev.salatmaster.golandmcp.go.GoGeneration
+import dev.salatmaster.golandmcp.go.GoImportsImpl
 import dev.salatmaster.golandmcp.go.GoInterfaceFactsImpl
 import dev.salatmaster.golandmcp.go.GoSymbolsImpl
 import dev.salatmaster.golandmcp.go.GoTypeFromJson
@@ -34,6 +35,7 @@ class GenerationToolset : McpToolset {
 
     private val facts = GoInterfaceFactsImpl()
     private val symbols = GoSymbolsImpl()
+    private val imports = GoImportsImpl()
 
     @McpTool
     @McpDescription(
@@ -172,6 +174,61 @@ class GenerationToolset : McpToolset {
             appendToFile(project, path, code)
                 .withSuccessHint("Remember that the file needs an import of \"testing\".")
         }
+    }
+
+    @McpTool
+    @McpDescription(
+        "Add imports to a Go file and tidy the import block: unused imports are removed and " +
+            "the rest sorted. Adding an import that is already present is a no-op, so this " +
+            "is safe to call repeatedly after generating code.",
+    )
+    suspend fun go_fix_imports(
+        @McpDescription("Path to the Go file, relative to the project root")
+        path: String,
+        @McpDescription("Import paths to add, e.g. ['fmt', 'net/http']; may be empty")
+        importsToAdd: List<String>,
+        @McpDescription("Remove unused imports and sort the block")
+        optimize: Boolean,
+    ): GoGeneratedCode =
+        fixImports(currentCoroutineContext().project, path, importsToAdd, optimize)
+
+    /** Testable core; the project is explicit so tests need no MCP call context. */
+    internal suspend fun fixImports(
+        project: Project,
+        path: String,
+        importsToAdd: List<String>,
+        optimize: Boolean,
+    ): GoGeneratedCode = withContext(Dispatchers.EDT) {
+        val resolved = resolveFile(project, path)
+            ?: return@withContext GoGeneratedCode(
+                "", path, false, "", "File not found: $path",
+            )
+        if (!imports.supports(resolved.psiFile)) {
+            return@withContext GoGeneratedCode(
+                "", path, false, "", "Not a Go file: $path",
+            )
+        }
+
+        val before = resolved.document.text
+        // The optimizer's Runnable must be produced before the edit and run inside the same
+        // write action, which is the contract the platform's ImportOptimizer expects.
+        val optimizeTask = if (optimize) imports.optimizeTask(resolved.psiFile) else null
+
+        writeToDocument(project, "Fix imports in $path") {
+            importsToAdd.filter { it.isNotBlank() }.forEach {
+                imports.addImport(resolved.psiFile, it, "")
+            }
+            optimizeTask?.run()
+        }
+
+        val after = resolved.document.text
+        GoGeneratedCode(
+            code = "",
+            path = path,
+            applied = before != after,
+            diff = unifiedDiff(path, before, after),
+            hint = if (before == after) "Imports were already correct; nothing changed." else "",
+        )
     }
 
     /**

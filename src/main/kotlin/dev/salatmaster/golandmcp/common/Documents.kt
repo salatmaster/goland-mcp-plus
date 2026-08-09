@@ -13,6 +13,7 @@ import com.intellij.psi.PsiManager
 data class ResolvedFile(
     val virtualFile: VirtualFile,
     val document: Document,
+    val psiFile: com.intellij.psi.PsiFile,
 )
 
 /**
@@ -41,7 +42,7 @@ fun resolveFile(project: Project, path: String): ResolvedFile? {
 
     val psiFile = PsiManager.getInstance(project).findFile(virtualFile) ?: return null
     val document = PsiDocumentManager.getInstance(project).getDocument(psiFile) ?: return null
-    return ResolvedFile(virtualFile, document)
+    return ResolvedFile(virtualFile, document, psiFile)
 }
 
 /**

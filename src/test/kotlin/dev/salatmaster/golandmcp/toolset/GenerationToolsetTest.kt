@@ -77,4 +77,30 @@ class GenerationToolsetTest : GoMcpToolTestCase() {
         assertTrue("code should still come back, was empty", result.code.isNotEmpty())
         assertTrue("hint should say the file was not found, was: ${result.hint}", result.hint.contains("not found"))
     }
+
+    fun `test adds a missing import`() {
+        loadFixture("basic")
+        val result = callTool { toolset.fixImports(project, "shapes.go", listOf("fmt"), optimize = false) }
+
+        assertTrue("should change the file, hint was: ${result.hint}", result.applied)
+        val content = callTool { batch.readFiles(project, listOf("shapes.go")) }.files.single().content
+        assertTrue("import should be present, file was:\n$content", content.contains("\"fmt\""))
+    }
+
+    fun `test adding an existing import changes nothing`() {
+        loadFixture("basic")
+        callTool { toolset.fixImports(project, "shapes.go", listOf("fmt"), optimize = false) }
+        val second = callTool { toolset.fixImports(project, "shapes.go", listOf("fmt"), optimize = false) }
+
+        assertFalse("second add should be a no-op", second.applied)
+        assertTrue(second.hint.contains("already correct"))
+    }
+
+    fun `test reports a missing file rather than failing silently`() {
+        loadFixture("basic")
+        val result = callTool { toolset.fixImports(project, "nosuch.go", listOf("fmt"), optimize = false) }
+
+        assertFalse(result.applied)
+        assertTrue(result.hint.contains("not found"))
+    }
 }
