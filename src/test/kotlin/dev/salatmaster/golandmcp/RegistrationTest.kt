@@ -2,6 +2,7 @@ package dev.salatmaster.golandmcp
 
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import dev.salatmaster.golandmcp.toolset.BatchToolset
 import dev.salatmaster.golandmcp.toolset.InterfaceToolset
 import dev.salatmaster.golandmcp.toolset.PackageToolset
 import dev.salatmaster.golandmcp.toolset.SymbolToolset
@@ -25,6 +26,7 @@ class RegistrationTest : BasePlatformTestCase() {
             InterfaceToolset::class,
             PackageToolset::class,
             UsagesToolset::class,
+            BatchToolset::class,
         )
 
     fun `test every toolset named in plugin xml is instantiable`() {
