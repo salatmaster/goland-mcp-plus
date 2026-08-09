@@ -16,7 +16,7 @@ The Marketplace is the distribution channel. Everything else points at it.
 
 **Uploading**
 
-1. `./gradlew buildPlugin`
+1. `PLUGIN_VERSION=1.0.0 ./gradlew buildPlugin` (in CI the value comes from the tag)
 2. Upload `build/distributions/*.zip` at
    <https://plugins.jetbrains.com/plugin/add>, category *Tools Integration*.
 3. After approval, generate a permanent token and store it as the
@@ -30,11 +30,24 @@ environment; unset, signing is skipped.
 
 ## GitHub release
 
-Tagging `v*` runs the release workflow: it verifies, builds, attaches the zip to a
-GitHub release with generated notes, and optionally publishes to the Marketplace.
+**The tag is the version.** Nothing in the repository pins one:
+`build.gradle.kts` reads `PLUGIN_VERSION` from the environment, the release workflow
+derives it from `GITHUB_REF_NAME`, and the `pluginVersion` in `gradle.properties` is
+only the fallback that local and CI builds carry. So a release is:
 
-Bump `pluginVersion` in `gradle.properties` and move the `Unreleased` section of
-`CHANGELOG.md` under the new version before tagging.
+```bash
+# move the Unreleased section of CHANGELOG.md under the new version, commit, then
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The workflow validates that the tag looks like a version, runs the suite, builds the
+plugin with that version, and creates a GitHub release with the zip attached and
+generated notes. Publishing to the Marketplace is a further step, gated behind the
+`PUBLISH_TO_MARKETPLACE` repository variable, so tagging alone never publishes.
+
+A tag that is not `vMAJOR.MINOR.PATCH` fails the workflow rather than producing a
+release with a nonsense version.
 
 ## MCP directories
 
@@ -69,13 +82,18 @@ implies a runnable server is a support burden and a broken first experience.
 /plugin install go-mcp-plus@go-mcp-plus
 ```
 
-Bump `version` in both `.claude-plugin/marketplace.json` and the plugin's own
-`plugin.json` when the skills change — Claude Code uses the version as the cache key
-and will not otherwise pull the update.
+**Neither manifest carries a `version`, deliberately.** With none set, Claude Code
+falls back to the git commit SHA of the plugin source, so pushing a change to the
+skills is enough for `/plugin update` to see it. A hand-written version here would be
+a second place to remember, and forgetting it means users silently keep the old
+skills.
 
 Validate before pushing:
 
 ```bash
-claude plugin validate . --strict
-claude plugin validate ./clients/claude-code/go-mcp-plus --strict
+claude plugin validate .
+claude plugin validate ./clients/claude-code/go-mcp-plus
 ```
+
+Do not add `--strict`: its only complaint is the missing `version`, which is the
+point.

@@ -13,7 +13,7 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
@@ -27,18 +27,19 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      # The IDE is headless here, so tests must not need a display.
+      # The IDE runs headless here; the build already sets java.awt.headless.
       - name: Test
         run: ./gradlew test verifyPluginStructure --no-daemon
 
       - name: Build the plugin
         run: ./gradlew buildPlugin --no-daemon
 
-      - name: Upload the plugin
-        if: success()
+      # Not a release artifact: this carries the gradle.properties fallback version,
+      # since only a tag names a real one.
+      - name: Upload the development build
         uses: actions/upload-artifact@v4
         with:
-          name: plugin
+          name: plugin-dev
           path: build/distributions/*.zip
           if-no-files-found: error
 

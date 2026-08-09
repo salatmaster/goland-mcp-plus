@@ -4,15 +4,27 @@ on:
   push:
     tags: ['v*']
 
+permissions:
+  contents: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    permissions:
-      contents: write
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
+
+      # The tag is the only place a released version is written down.
+      - name: Derive the version from the tag
+        id: version
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$'; then
+            echo "Tag '$GITHUB_REF_NAME' is not a version; expected vMAJOR.MINOR.PATCH" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Set up JDK 25
         uses: actions/setup-java@v4
@@ -23,22 +35,36 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Verify
+      - name: Test
+        env:
+          PLUGIN_VERSION: ${{ steps.version.outputs.version }}
         run: ./gradlew test verifyPluginStructure --no-daemon
 
       - name: Build the plugin
+        env:
+          PLUGIN_VERSION: ${{ steps.version.outputs.version }}
+          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
         run: ./gradlew buildPlugin --no-daemon
 
       - name: Publish the GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: build/distributions/*.zip
-          generate_release_notes: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            build/distributions/*.zip
 
-      # Publishing to the Marketplace is a separate, deliberate step: it needs a
-      # token, and a bad release there cannot be withdrawn as easily as a tag.
+      # A separate, deliberate step: a bad release on the Marketplace cannot be
+      # withdrawn as easily as a tag, so tagging alone never publishes there.
       - name: Publish to the JetBrains Marketplace
         if: ${{ vars.PUBLISH_TO_MARKETPLACE == 'true' }}
         env:
+          PLUGIN_VERSION: ${{ steps.version.outputs.version }}
           PUBLISH_TOKEN: ${{ secrets.JETBRAINS_MARKETPLACE_TOKEN }}
+          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
         run: ./gradlew publishPlugin --no-daemon

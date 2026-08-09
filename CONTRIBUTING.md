@@ -1,5 +1,13 @@
 # Contributing
 
+## Versions
+
+There is one place a released version is written down: the git tag. `build.gradle.kts`
+takes `PLUGIN_VERSION` from the environment and the release workflow derives it from
+the tag; `pluginVersion` in `gradle.properties` is the fallback a local build carries.
+The Claude Code plugin manifests carry no version at all, so Claude Code falls back to
+the commit SHA. Do not add one back.
+
 ## Building
 
 ```bash

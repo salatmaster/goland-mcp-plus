@@ -10,7 +10,6 @@
       "name": "go-mcp-plus",
       "source": "./clients/claude-code/go-mcp-plus",
       "description": "Teaches Claude Code to use the Go MCP++ tools in GoLand instead of grepping Go source",
-      "version": "0.1.0",
       "author": {
         "name": "salatmaster"
       }

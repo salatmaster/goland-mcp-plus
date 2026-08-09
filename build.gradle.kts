@@ -7,7 +7,12 @@ plugins {
 }
 
 group = "io.github.salatmaster"
-version = providers.gradleProperty("pluginVersion").get()
+// Released versions come from the git tag: the release workflow derives PLUGIN_VERSION
+// from it. The gradle.properties value is only the fallback for local and CI builds, so
+// there is one place a version is ever declared, and it is the tag.
+version = providers.environmentVariable("PLUGIN_VERSION")
+    .orElse(providers.gradleProperty("pluginVersion"))
+    .get()
 
 repositories {
     mavenCentral()
