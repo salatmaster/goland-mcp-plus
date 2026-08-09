@@ -6,6 +6,7 @@ import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
 import com.intellij.openapi.project.Project
+import dev.salatmaster.golandmcp.metrics.tracked
 import dev.salatmaster.golandmcp.toolchain.GoCommandResult
 import dev.salatmaster.golandmcp.toolchain.GoDiagnosticsParser
 import dev.salatmaster.golandmcp.toolchain.GoTestOutputParser
@@ -81,7 +82,10 @@ class ToolchainToolset : McpToolset {
         runPattern: String,
         @McpDescription("Timeout in milliseconds")
         timeoutMs: Int,
-    ): GoTestResult = test(currentCoroutineContext().project, packagePattern, runPattern, timeoutMs)
+    ): GoTestResult =
+        tracked("go_test") {
+            test(currentCoroutineContext().project, packagePattern, runPattern, timeoutMs)
+        }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun test(
@@ -141,7 +145,10 @@ class ToolchainToolset : McpToolset {
         packagePattern: String,
         @McpDescription("Timeout in milliseconds")
         timeoutMs: Int,
-    ): GoCheckResult = buildCheck(currentCoroutineContext().project, packagePattern, timeoutMs)
+    ): GoCheckResult =
+        tracked("go_build_check") {
+            buildCheck(currentCoroutineContext().project, packagePattern, timeoutMs)
+        }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun buildCheck(
@@ -169,7 +176,8 @@ class ToolchainToolset : McpToolset {
         packagePattern: String,
         @McpDescription("Timeout in milliseconds")
         timeoutMs: Int,
-    ): GoCheckResult = vet(currentCoroutineContext().project, packagePattern, timeoutMs)
+    ): GoCheckResult =
+        tracked("go_vet") { vet(currentCoroutineContext().project, packagePattern, timeoutMs) }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun vet(
@@ -193,7 +201,10 @@ class ToolchainToolset : McpToolset {
         arguments: List<String>,
         @McpDescription("Timeout in milliseconds")
         timeoutMs: Int,
-    ): GoModResult = mod(currentCoroutineContext().project, subcommand, arguments, timeoutMs)
+    ): GoModResult =
+        tracked("go_mod") {
+            mod(currentCoroutineContext().project, subcommand, arguments, timeoutMs)
+        }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun mod(

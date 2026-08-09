@@ -35,8 +35,9 @@ dependencies {
 kotlin { jvmToolchain(25) }
 
 intellijPlatform {
-    // The plugin contributes no settings UI yet; building searchable options
-    // launches a headless IDE and costs about a minute per build.
+    // The one settings page this plugin contributes is a read-only usage table with nothing
+    // to search for, and building searchable options launches a headless IDE for about a
+    // minute on every build.
     buildSearchableOptions = false
 
     pluginConfiguration {

@@ -17,6 +17,7 @@ import dev.salatmaster.golandmcp.go.GoImportsImpl
 import dev.salatmaster.golandmcp.go.GoInterfaceFactsImpl
 import dev.salatmaster.golandmcp.go.GoSymbolsImpl
 import dev.salatmaster.golandmcp.go.GoTypeFromJson
+import dev.salatmaster.golandmcp.metrics.tracked
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.withContext
@@ -54,9 +55,12 @@ class GenerationToolset : McpToolset {
         pointerReceiver: Boolean,
         @McpDescription("Append the stubs to the file declaring the type")
         apply: Boolean,
-    ): GoGeneratedCode = implementInterface(
-        currentCoroutineContext().project, typeName, interfaceName, pointerReceiver, apply,
-    )
+    ): GoGeneratedCode =
+        tracked("go_implement_interface") {
+            implementInterface(
+                currentCoroutineContext().project, typeName, interfaceName, pointerReceiver, apply,
+            )
+        }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun implementInterface(
@@ -122,9 +126,12 @@ class GenerationToolset : McpToolset {
         methodNames: List<String>,
         @McpDescription("File to append the interface to, relative to the project root; empty to only return it")
         path: String,
-    ): GoGeneratedCode = extractInterface(
-        currentCoroutineContext().project, typeName, interfaceName, methodNames, path,
-    )
+    ): GoGeneratedCode =
+        tracked("go_extract_interface") {
+            extractInterface(
+                currentCoroutineContext().project, typeName, interfaceName, methodNames, path,
+            )
+        }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun extractInterface(
@@ -193,7 +200,9 @@ class GenerationToolset : McpToolset {
         @McpDescription("File to append the declarations to, relative to the project root; empty to only return them")
         path: String,
     ): GoGeneratedCode =
-        typeFromJson(currentCoroutineContext().project, jsonSample, rootTypeName, path)
+        tracked("go_type_from_json") {
+            typeFromJson(currentCoroutineContext().project, jsonSample, rootTypeName, path)
+        }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun typeFromJson(
@@ -230,7 +239,9 @@ class GenerationToolset : McpToolset {
         @McpDescription("Test file to append to, relative to the project root; empty to only return the code")
         path: String,
     ): GoGeneratedCode =
-        generateTest(currentCoroutineContext().project, functionName, receiverType, path)
+        tracked("go_generate_test") {
+            generateTest(currentCoroutineContext().project, functionName, receiverType, path)
+        }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun generateTest(
@@ -264,7 +275,9 @@ class GenerationToolset : McpToolset {
         @McpDescription("Remove unused imports and sort the block")
         optimize: Boolean,
     ): GoGeneratedCode =
-        fixImports(currentCoroutineContext().project, path, importsToAdd, optimize)
+        tracked("go_fix_imports") {
+            fixImports(currentCoroutineContext().project, path, importsToAdd, optimize)
+        }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun fixImports(

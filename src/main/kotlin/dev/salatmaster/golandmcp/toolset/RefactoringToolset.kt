@@ -19,6 +19,7 @@ import dev.salatmaster.golandmcp.go.GoRefactoringOutcome
 import dev.salatmaster.golandmcp.go.GoRefactoringsImpl
 import dev.salatmaster.golandmcp.go.GoSignatureChangeOutcome
 import dev.salatmaster.golandmcp.go.GoUsagesImpl
+import dev.salatmaster.golandmcp.metrics.tracked
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.withContext
@@ -113,7 +114,9 @@ class RefactoringToolset : McpToolset {
         @McpDescription("Count usages in _test.go files as blocking")
         testUsagesBlock: Boolean,
     ): GoSafeDeleteResult =
-        safeDelete(currentCoroutineContext().project, reference, testUsagesBlock)
+        tracked("go_safe_delete") {
+            safeDelete(currentCoroutineContext().project, reference, testUsagesBlock)
+        }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun safeDelete(
@@ -170,7 +173,10 @@ class RefactoringToolset : McpToolset {
         reference: String,
         @McpDescription("Delete the declaration once its calls have been inlined")
         removeDeclaration: Boolean,
-    ): GoInlineResult = inline(currentCoroutineContext().project, reference, removeDeclaration)
+    ): GoInlineResult =
+        tracked("go_inline") {
+            inline(currentCoroutineContext().project, reference, removeDeclaration)
+        }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun inline(
@@ -206,7 +212,9 @@ class RefactoringToolset : McpToolset {
         @McpDescription("Target directory, relative to the project root")
         targetDirectory: String,
     ): GoMoveFilesResult =
-        moveFiles(currentCoroutineContext().project, paths, targetDirectory)
+        tracked("go_move_files") {
+            moveFiles(currentCoroutineContext().project, paths, targetDirectory)
+        }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun moveFiles(
@@ -281,14 +289,16 @@ class RefactoringToolset : McpToolset {
         )
         updateImplementations: Boolean,
     ): GoChangeSignatureResult =
-        changeSignature(
-            currentCoroutineContext().project,
-            reference,
-            newName,
-            parameters,
-            results,
-            updateImplementations,
-        )
+        tracked("go_change_signature") {
+            changeSignature(
+                currentCoroutineContext().project,
+                reference,
+                newName,
+                parameters,
+                results,
+                updateImplementations,
+            )
+        }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun changeSignature(

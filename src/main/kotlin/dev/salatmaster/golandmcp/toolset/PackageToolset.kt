@@ -12,6 +12,7 @@ import dev.salatmaster.golandmcp.go.GoFunctionInfo
 import dev.salatmaster.golandmcp.go.GoPackagesImpl
 import dev.salatmaster.golandmcp.go.GoTypeInfo
 import dev.salatmaster.golandmcp.go.GoValueInfo
+import dev.salatmaster.golandmcp.metrics.tracked
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.Serializable
 
@@ -89,7 +90,9 @@ class PackageToolset : McpToolset {
         @McpDescription("Maximum number of entries per category (types, functions, and so on)")
         limit: Int,
     ): GoPackageApiResult =
-        packageApi(currentCoroutineContext().project, packageReference, includeUnexported, limit)
+        tracked("go_package_api") {
+            packageApi(currentCoroutineContext().project, packageReference, includeUnexported, limit)
+        }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun packageApi(

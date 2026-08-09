@@ -13,6 +13,12 @@
     <depends>org.jetbrains.plugins.go</depends>
 
     <extensions defaultExtensionNs="com.intellij">
+        <applicationConfigurable
+                instance="dev.salatmaster.golandmcp.metrics.GoMcpUsageConfigurable"
+                id="dev.salatmaster.golandmcp.usage"
+                displayName="Go MCP++"
+                parentId="tools"/>
+
         <mcpServer.mcpToolset implementation="dev.salatmaster.golandmcp.toolset.SymbolToolset"/>
         <mcpServer.mcpToolset implementation="dev.salatmaster.golandmcp.toolset.InterfaceToolset"/>
         <mcpServer.mcpToolset implementation="dev.salatmaster.golandmcp.toolset.PackageToolset"/>

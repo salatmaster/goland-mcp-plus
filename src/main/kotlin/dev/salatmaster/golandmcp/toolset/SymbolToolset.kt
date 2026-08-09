@@ -13,6 +13,7 @@ import dev.salatmaster.golandmcp.go.GoLookupResult
 import dev.salatmaster.golandmcp.go.GoSymbolInfo
 import dev.salatmaster.golandmcp.go.GoSourceResult
 import dev.salatmaster.golandmcp.go.GoSymbolsImpl
+import dev.salatmaster.golandmcp.metrics.tracked
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.Serializable
 
@@ -66,7 +67,8 @@ class SymbolToolset : McpToolset {
     suspend fun go_symbol(
         @McpDescription("Symbol reference, e.g. 'net/http.Client.Do' or 'Rect.Area'")
         reference: String,
-    ): GoSymbolResult = symbolInfo(currentCoroutineContext().project, reference)
+    ): GoSymbolResult =
+        tracked("go_symbol") { symbolInfo(currentCoroutineContext().project, reference) }
 
     /**
      * Testable core.
@@ -102,7 +104,8 @@ class SymbolToolset : McpToolset {
     suspend fun go_doc(
         @McpDescription("Symbol reference, e.g. 'net/http.Client.Do' or 'Rect.Area'")
         reference: String,
-    ): GoDocResult = doc(currentCoroutineContext().project, reference)
+    ): GoDocResult =
+        tracked("go_doc") { doc(currentCoroutineContext().project, reference) }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun doc(project: Project, reference: String): GoDocResult {
@@ -126,7 +129,8 @@ class SymbolToolset : McpToolset {
     suspend fun go_source_of(
         @McpDescription("Symbol reference, e.g. 'net/http.Client' or 'Rect.Area'")
         reference: String,
-    ): GoSourceOfResult = sourceOf(currentCoroutineContext().project, reference)
+    ): GoSourceOfResult =
+        tracked("go_source_of") { sourceOf(currentCoroutineContext().project, reference) }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun sourceOf(project: Project, reference: String): GoSourceOfResult {

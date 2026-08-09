@@ -9,6 +9,7 @@ import com.intellij.openapi.application.readAction
 import com.intellij.openapi.project.Project
 import dev.salatmaster.golandmcp.go.GoInterfaceFactsImpl
 import dev.salatmaster.golandmcp.go.GoSatisfaction
+import dev.salatmaster.golandmcp.metrics.tracked
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.Serializable
 
@@ -88,7 +89,9 @@ class InterfaceToolset : McpToolset {
         @McpDescription("Maximum number of implementations to return")
         limit: Int,
     ): GoImplementationsResult =
-        implementations(currentCoroutineContext().project, interfaceName, limit)
+        tracked("go_implementations") {
+            implementations(currentCoroutineContext().project, interfaceName, limit)
+        }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun implementations(
@@ -146,7 +149,9 @@ class InterfaceToolset : McpToolset {
         @McpDescription("Maximum number of interfaces to return")
         limit: Int,
     ): GoInterfacesOfResult =
-        interfacesOf(currentCoroutineContext().project, typeName, limit)
+        tracked("go_interfaces_of") {
+            interfacesOf(currentCoroutineContext().project, typeName, limit)
+        }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun interfacesOf(
@@ -199,7 +204,9 @@ class InterfaceToolset : McpToolset {
         @McpDescription("Interface name, e.g. 'Shape'")
         interfaceName: String,
     ): GoInterfaceCheckResult =
-        interfaceCheck(currentCoroutineContext().project, typeName, interfaceName)
+        tracked("go_interface_check") {
+            interfaceCheck(currentCoroutineContext().project, typeName, interfaceName)
+        }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun interfaceCheck(

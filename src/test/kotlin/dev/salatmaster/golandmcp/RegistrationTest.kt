@@ -85,4 +85,27 @@ class RegistrationTest : BasePlatformTestCase() {
             }
         }
     }
+
+    /**
+     * A tool that is not wrapped records nothing, and the usage table then quietly
+     * under-reports instead of failing — so the wiring is checked at the source level.
+     */
+    fun `test every tool routes through the usage tracker`() {
+        val sources = java.io.File("src/main/kotlin/dev/salatmaster/golandmcp/toolset")
+            .walkTopDown()
+            .filter { it.extension == "kt" }
+            .joinToString("\n") { it.readText() }
+
+        val declared = Regex("""suspend fun (go_\w+)\(""").findAll(sources)
+            .map { it.groupValues[1] }
+            .toList()
+        assertTrue("expected to find the tool entry points", declared.size >= 24)
+
+        val untracked = declared.filterNot { sources.contains("tracked(\"$it\")") }
+        assertTrue(
+            "these tools do not record their usage; wrap the @McpTool body in " +
+                "tracked(\"<name>\") { ... }: $untracked",
+            untracked.isEmpty(),
+        )
+    }
 }

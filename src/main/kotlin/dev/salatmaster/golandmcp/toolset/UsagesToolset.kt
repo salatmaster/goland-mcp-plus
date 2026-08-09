@@ -10,6 +10,7 @@ import com.intellij.openapi.project.Project
 import dev.salatmaster.golandmcp.common.SymbolRefParseException
 import dev.salatmaster.golandmcp.common.parseSymbolRef
 import dev.salatmaster.golandmcp.go.GoUsagesImpl
+import dev.salatmaster.golandmcp.metrics.tracked
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.Serializable
 
@@ -52,7 +53,9 @@ class UsagesToolset : McpToolset {
         @McpDescription("Maximum number of usages to return")
         limit: Int,
     ): GoFindUsagesResult =
-        findUsages(currentCoroutineContext().project, reference, includeTests, limit)
+        tracked("go_find_usages") {
+            findUsages(currentCoroutineContext().project, reference, includeTests, limit)
+        }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun findUsages(

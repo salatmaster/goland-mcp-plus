@@ -26,23 +26,53 @@ data class ResolvedFile(
  * Returns null rather than throwing so callers can report which of several paths failed.
  */
 fun resolveFile(project: Project, path: String): ResolvedFile? {
-    val normalized = path.trim().removePrefix("./")
+    val cleaned = cleanPath(path)
+    if (cleaned.isEmpty()) return null
 
-    val fromContentRoot = ProjectRootManager.getInstance(project).contentRoots
+    val roots = ProjectRootManager.getInstance(project).contentRoots
+    val fromContentRoot = candidatePaths(cleaned, roots.map { it.name })
         .asSequence()
-        .mapNotNull { root -> root.findFileByRelativePath(normalized) }
+        .flatMap { candidate -> roots.asSequence().mapNotNull { it.findFileByRelativePath(candidate) } }
         .firstOrNull { !it.isDirectory }
 
     val virtualFile = fromContentRoot
-        ?: LocalFileSystem.getInstance().findFileByPath(normalized)?.takeIf { !it.isDirectory }
+        ?: LocalFileSystem.getInstance().findFileByPath(cleaned)?.takeIf { !it.isDirectory }
         ?: project.basePath
-            ?.let { LocalFileSystem.getInstance().findFileByPath("$it/$normalized") }
+            ?.let { LocalFileSystem.getInstance().findFileByPath("$it/$cleaned") }
             ?.takeIf { !it.isDirectory }
         ?: return null
 
     val psiFile = PsiManager.getInstance(project).findFile(virtualFile) ?: return null
     val document = PsiDocumentManager.getInstance(project).getDocument(psiFile) ?: return null
     return ResolvedFile(virtualFile, document, psiFile)
+}
+
+/**
+ * Strips the decoration a model puts around a path: quoting, a `file://` scheme, Windows
+ * separators. What remains is still a path, just a comparable one.
+ */
+internal fun cleanPath(path: String): String =
+    path.trim()
+        .trim('`', '\'', '"')
+        .trim()
+        .removePrefix("file://")
+        .replace('\\', '/')
+        .trim()
+
+/**
+ * The project-relative forms worth trying, most literal first.
+ *
+ * Agents habitually write a path the way it appeared in a shell prompt or an editor tab —
+ * with a leading slash, or prefixed by the directory the project sits in. Both name the
+ * intended file unambiguously once the prefix is dropped, and trying them costs one lookup.
+ */
+internal fun candidatePaths(cleaned: String, rootNames: List<String>): List<String> {
+    val relative = cleaned.removePrefix("./").removePrefix("/")
+    val candidates = linkedSetOf(cleaned, relative)
+    for (name in rootNames) {
+        if (relative.startsWith("$name/")) candidates += relative.removePrefix("$name/")
+    }
+    return candidates.filter { it.isNotEmpty() }
 }
 
 /**

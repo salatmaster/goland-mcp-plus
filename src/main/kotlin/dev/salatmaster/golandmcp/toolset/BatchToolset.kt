@@ -11,6 +11,7 @@ import com.intellij.openapi.project.Project
 import dev.salatmaster.golandmcp.common.resolveFile
 import dev.salatmaster.golandmcp.common.unifiedDiff
 import dev.salatmaster.golandmcp.common.writeToDocument
+import dev.salatmaster.golandmcp.metrics.tracked
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.withContext
@@ -78,7 +79,8 @@ class BatchToolset : McpToolset {
     suspend fun go_read_files(
         @McpDescription("Paths relative to the project root")
         paths: List<String>,
-    ): GoReadFilesResult = readFiles(currentCoroutineContext().project, paths)
+    ): GoReadFilesResult =
+        tracked("go_read_files") { readFiles(currentCoroutineContext().project, paths) }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun readFiles(project: Project, paths: List<String>): GoReadFilesResult {
@@ -108,7 +110,10 @@ class BatchToolset : McpToolset {
     suspend fun go_replace_lines(
         @McpDescription("Line-range replacements to apply")
         replacements: List<GoLineReplacement>,
-    ): GoBatchEditResult = replaceLines(currentCoroutineContext().project, replacements)
+    ): GoBatchEditResult =
+        tracked("go_replace_lines") {
+            replaceLines(currentCoroutineContext().project, replacements)
+        }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun replaceLines(
@@ -173,7 +178,10 @@ class BatchToolset : McpToolset {
         path: String,
         @McpDescription("Replacements to apply, in order")
         replacements: List<GoTextReplacement>,
-    ): GoEditResult = batchReplaceText(currentCoroutineContext().project, path, replacements)
+    ): GoEditResult =
+        tracked("go_batch_replace_text") {
+            batchReplaceText(currentCoroutineContext().project, path, replacements)
+        }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun batchReplaceText(
