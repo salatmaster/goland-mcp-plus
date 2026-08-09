@@ -28,3 +28,21 @@ fun <T> guardGoApi(what: String, block: () -> T): T =
                 "Details: ${e::class.simpleName}: ${e.message}",
         )
     }
+
+/**
+ * Like [runCatching], but never swallows cancellation.
+ *
+ * The platform signals "stop what you are doing" by throwing — a cancelled progress, a read
+ * action asked to yield to a pending write. Reporting that as an ordinary tool failure would
+ * leave the IDE believing the operation is still under way, so it is rethrown untouched.
+ * `ProcessCanceledException` extends `CancellationException`, so one catch covers both it and
+ * coroutine cancellation.
+ */
+internal inline fun <T> runCatchingCancellable(block: () -> T): Result<T> =
+    try {
+        Result.success(block())
+    } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        Result.failure(e)
+    }

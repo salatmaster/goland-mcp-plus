@@ -27,6 +27,21 @@ interface GoRefactorings {
     ): GoRefactoringOutcome
 
     fun safeDelete(project: Project, ref: SymbolRef): GoRefactoringOutcome
+
+    /**
+     * Rewrites a function, method or interface method signature and every call site with it.
+     *
+     * The lists describe the signature in full, not a patch: each entry carries the index it
+     * had in the current signature, which is how existing arguments follow a reorder.
+     */
+    fun changeSignature(
+        project: Project,
+        ref: SymbolRef,
+        newName: String,
+        parameters: List<GoParameterChange>,
+        results: List<GoParameterChange>,
+        updateImplementations: Boolean,
+    ): GoSignatureChangeOutcome
 }
 
 class GoRefactoringsImpl(
@@ -63,9 +78,19 @@ class GoRefactoringsImpl(
         }
     }
 
+    override fun changeSignature(
+        project: Project,
+        ref: SymbolRef,
+        newName: String,
+        parameters: List<GoParameterChange>,
+        results: List<GoParameterChange>,
+        updateImplementations: Boolean,
+    ): GoSignatureChangeOutcome =
+        changeGoSignature(project, symbols, ref, newName, parameters, results, updateImplementations)
+
     private fun runProcessor(action: () -> Unit): GoRefactoringOutcome =
         guardGoApi("refactoring") {
-            runCatching(action).fold(
+            runCatchingCancellable(action).fold(
                 onSuccess = { GoRefactoringOutcome.Done },
                 onFailure = { GoRefactoringOutcome.Failed("${it::class.simpleName}: ${it.message}") },
             )

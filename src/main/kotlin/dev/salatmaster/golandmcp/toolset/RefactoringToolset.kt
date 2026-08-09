@@ -14,8 +14,10 @@ import com.intellij.refactoring.move.moveFilesOrDirectories.MoveFilesOrDirectori
 import dev.salatmaster.golandmcp.common.SymbolRefParseException
 import dev.salatmaster.golandmcp.common.parseSymbolRef
 import dev.salatmaster.golandmcp.common.resolveFile
+import dev.salatmaster.golandmcp.go.GoParameterChange
 import dev.salatmaster.golandmcp.go.GoRefactoringOutcome
 import dev.salatmaster.golandmcp.go.GoRefactoringsImpl
+import dev.salatmaster.golandmcp.go.GoSignatureChangeOutcome
 import dev.salatmaster.golandmcp.go.GoUsagesImpl
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
@@ -43,6 +45,46 @@ data class GoInlineResult(
     val target: String,
     val inlined: Boolean,
     val declarationRemoved: Boolean,
+    val hint: String,
+)
+
+/** One parameter or result of the signature being requested. */
+@Serializable
+data class GoSignatureEntry(
+    @McpDescription(
+        "0-based position this entry holds in the CURRENT signature, or -1 if it is new. " +
+            "This is what lets arguments already written at call sites follow a reorder " +
+            "instead of being dropped.",
+    )
+    val fromIndex: Int,
+    @McpDescription(
+        "Name, or empty for an unnamed entry. Go requires parameters to be either all named " +
+            "or all unnamed, and results likewise.",
+    )
+    val name: String,
+    @McpDescription(
+        "Go type as written in source: 'int', '[]byte', '*User', 'map[string]int', " +
+            "'context.Context'. Write the plain element type for a variadic entry and set " +
+            "variadic instead of spelling '...'.",
+    )
+    val type: String,
+    @McpDescription("True for the trailing '...T' parameter. Not allowed on a result.")
+    val variadic: Boolean,
+    @McpDescription(
+        "Expression to write at existing call sites for a NEW parameter, or in existing " +
+            "return statements for a new result: 'nil', '0', '\"\"', 'context.Background()'. " +
+            "Leave empty to use the type's zero value. Ignored for entries that already exist.",
+    )
+    val defaultValue: String,
+)
+
+@Serializable
+data class GoChangeSignatureResult(
+    val target: String,
+    val applied: Boolean,
+    /** The signature as it was, so the change is auditable from the result alone. */
+    val before: String,
+    val after: String,
     val hint: String,
 )
 
@@ -212,6 +254,110 @@ class RefactoringToolset : McpToolset {
             )
         }
     }
+
+    @McpTool
+    @McpDescription(
+        "Change a Go function, method or interface method signature - rename it, add, drop, " +
+            "reorder or retype parameters and results - and rewrite every call site to match. " +
+            "Pass the COMPLETE new signature, not a patch: every entry carries fromIndex, the " +
+            "position it holds in the current signature, and that mapping is what moves existing " +
+            "arguments with a reordered parameter instead of dropping them. Read the current " +
+            "signature first with go_symbol or go_source_of. Editing a signature by hand means " +
+            "finding every caller and getting each argument order right, which is exactly where " +
+            "this goes wrong silently.",
+    )
+    suspend fun go_change_signature(
+        @McpDescription("Function, method or interface method, e.g. 'Double', 'Rect.Area', 'Repo.Get'")
+        reference: String,
+        @McpDescription("New name, or empty to keep the current one")
+        newName: String,
+        @McpDescription("The complete new parameter list, in order; empty for no parameters")
+        parameters: List<GoSignatureEntry>,
+        @McpDescription("The complete new result list, in order; empty for no results")
+        results: List<GoSignatureEntry>,
+        @McpDescription(
+            "When the target is an interface method, also rewrite the types that implement it. " +
+                "Ignored otherwise.",
+        )
+        updateImplementations: Boolean,
+    ): GoChangeSignatureResult =
+        changeSignature(
+            currentCoroutineContext().project,
+            reference,
+            newName,
+            parameters,
+            results,
+            updateImplementations,
+        )
+
+    /** Testable core; the project is explicit so tests need no MCP call context. */
+    internal suspend fun changeSignature(
+        project: Project,
+        reference: String,
+        newName: String,
+        parameters: List<GoSignatureEntry>,
+        results: List<GoSignatureEntry>,
+        updateImplementations: Boolean,
+    ): GoChangeSignatureResult {
+        val ref = try {
+            parseSymbolRef(reference)
+        } catch (e: SymbolRefParseException) {
+            mcpFail(e.message ?: "Could not parse '$reference'")
+        }
+
+        val outcome = withContext(Dispatchers.EDT) {
+            refactorings.changeSignature(
+                project,
+                ref,
+                newName.trim(),
+                parameters.map { it.toChange() },
+                results.map { it.toChange() },
+                updateImplementations,
+            )
+        }
+
+        return when (outcome) {
+            is GoSignatureChangeOutcome.Done -> GoChangeSignatureResult(
+                target = reference,
+                applied = true,
+                before = outcome.before,
+                after = outcome.after,
+                hint = "Call sites were rewritten by the IDE" +
+                    (if (updateImplementations) " together with the implementations" else "") +
+                    ". Types named in a new parameter or defaultValue are not imported " +
+                    "automatically, so run go_build_check to confirm the package still compiles.",
+            )
+
+            is GoSignatureChangeOutcome.Unchanged -> GoChangeSignatureResult(
+                target = reference,
+                applied = false,
+                before = outcome.signature,
+                after = outcome.signature,
+                hint = "The requested signature is the one it already has; nothing was changed.",
+            )
+
+            is GoSignatureChangeOutcome.Rejected ->
+                mcpFail("Cannot change the signature of '$reference': ${outcome.reason}.")
+
+            is GoSignatureChangeOutcome.Failed -> GoChangeSignatureResult(
+                target = reference,
+                applied = false,
+                before = outcome.before,
+                after = outcome.before,
+                hint = "The refactoring failed: ${outcome.reason}. Undo it in the IDE if any " +
+                    "part of it was applied.",
+            )
+        }
+    }
+
+    private fun GoSignatureEntry.toChange() =
+        GoParameterChange(
+            fromIndex = fromIndex,
+            name = name.trim(),
+            type = type.trim(),
+            variadic = variadic,
+            defaultValue = defaultValue.trim(),
+        )
 
     private fun resolveDirectory(project: Project, path: String) =
         com.intellij.openapi.roots.ProjectRootManager.getInstance(project).contentRoots
