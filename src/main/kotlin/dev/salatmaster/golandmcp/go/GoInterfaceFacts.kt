@@ -25,6 +25,15 @@ data class GoSatisfaction(
     val mismatched: List<GoMethodRequirement>,
 )
 
+/** An interface a given type satisfies. */
+data class GoSatisfiedInterface(
+    val interfaceName: String,
+    val qualifiedName: String,
+    val packagePath: String,
+    val location: String,
+    val requiresPointer: Boolean,
+)
+
 data class GoImplementor(
     val typeName: String,
     val qualifiedName: String,
@@ -39,4 +48,11 @@ interface GoInterfaceFacts {
     fun check(project: Project, typeSpecName: String, interfaceName: String): GoSatisfaction?
 
     fun implementors(project: Project, interfaceName: String, limit: Int): List<GoImplementor>
+
+    /**
+     * The interfaces a type satisfies — the reverse of [implementors].
+     *
+     * Empty interfaces are excluded: everything satisfies them, so listing them is noise.
+     */
+    fun interfacesOf(project: Project, typeName: String, limit: Int): List<GoSatisfiedInterface>
 }

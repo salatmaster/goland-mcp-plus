@@ -53,4 +53,10 @@ intellijPlatform {
 
 tasks.test {
     systemProperty("java.awt.headless", "true")
+
+    // testData lives outside the resource directories, so Gradle would not otherwise
+    // notice fixture edits and would report the previous run as still up to date.
+    inputs.dir(layout.projectDirectory.dir("src/test/testData"))
+        .withPropertyName("testData")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }

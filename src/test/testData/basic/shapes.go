@@ -31,3 +31,13 @@ type Triangle struct {
 }
 
 func (t Triangle) Area() float64 { return t.Base * t.Height / 2 }
+
+// Namer is a single-method interface that several shapes also satisfy.
+type Namer interface {
+	Name() string
+}
+
+// Sizer is satisfied by nothing in this fixture.
+type Sizer interface {
+	Size() int
+}

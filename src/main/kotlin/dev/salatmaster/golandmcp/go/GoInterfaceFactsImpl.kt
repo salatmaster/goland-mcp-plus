@@ -3,12 +3,19 @@ package dev.salatmaster.golandmcp.go
 import com.goide.psi.GoInterfaceType
 import com.goide.psi.GoMethodDeclaration
 import com.goide.psi.GoMethodSpec
+import com.goide.psi.GoParameters
+import com.goide.psi.GoSignature
+import com.goide.psi.GoType
 import com.goide.psi.GoTypeSpec
 import com.goide.stubs.index.GoMethodFingerprintIndex
+import com.goide.stubs.index.GoMethodSpecFingerprintIndex
+import com.goide.stubs.index.GoMethodSpecInheritanceIndex
 import com.goide.stubs.index.GoTypesIndex
 import com.intellij.openapi.project.Project
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.stubs.StubIndex
+import com.intellij.psi.util.PsiTreeUtil
+import com.intellij.util.Processor
 import dev.salatmaster.golandmcp.common.formatLocation
 import dev.salatmaster.golandmcp.common.projectFirst
 
@@ -77,6 +84,102 @@ class GoInterfaceFactsImpl : GoInterfaceFacts {
     }
 
     /**
+     * The interfaces a type satisfies.
+     *
+     * Candidates come from two directions, because neither alone is complete. Interfaces
+     * that declare a method of the right name are found through `GoMethodSpecFingerprintIndex`.
+     * Interfaces assembled purely by embedding — `ReadWriter` declares nothing itself — never
+     * appear there, so each direct candidate is then widened through
+     * `GoMethodSpecInheritanceIndex`, which is keyed by the embedded interface's name.
+     */
+    override fun interfacesOf(
+        project: Project,
+        typeName: String,
+        limit: Int,
+    ): List<GoSatisfiedInterface> = guardGoApi("interfaces of") {
+        val scope = GlobalSearchScope.allScope(project)
+        val type = findType(project, scope, typeName) ?: return@guardGoApi emptyList()
+        val methodNames = type.methods.mapNotNull { it.name }.toSet()
+        if (methodNames.isEmpty()) return@guardGoApi emptyList()
+
+        val direct = interfacesDeclaringAny(project, scope, methodNames)
+        val candidates = withEmbedders(project, scope, direct).projectFirst(project)
+
+        val found = LinkedHashMap<String, GoSatisfiedInterface>()
+        for (candidate in candidates) {
+            if (found.size >= limit) break
+            val ifaceType = candidate.specType?.type as? GoInterfaceType ?: continue
+            // An empty interface is satisfied by everything, so reporting it says nothing.
+            if (ifaceType.allMethods.isEmpty()) continue
+            val name = candidate.name ?: continue
+            if (found.containsKey(name)) continue
+
+            val result = satisfaction(type, ifaceType)
+            if (result.missing.isNotEmpty() || result.mismatched.isNotEmpty()) continue
+
+            found[name] = GoSatisfiedInterface(
+                interfaceName = name,
+                qualifiedName = candidate.qualifiedName.orEmpty(),
+                packagePath = candidate.containingFile.getImportPath(false).orEmpty(),
+                location = formatLocation(project, candidate),
+                requiresPointer = result.checkedAs.startsWith("*"),
+            )
+        }
+
+        found.values.toList()
+    }
+
+    /**
+     * Grows a candidate set by repeatedly adding the interfaces that embed it.
+     *
+     * Embedding chains, so one pass is not enough: an interface may embed one that itself
+     * embeds another. The depth cap keeps a cyclic or pathological hierarchy from looping;
+     * real Go code nests far shallower than this.
+     */
+    private fun withEmbedders(
+        project: Project,
+        scope: GlobalSearchScope,
+        seeds: List<GoTypeSpec>,
+    ): List<GoTypeSpec> {
+        val all = LinkedHashSet(seeds)
+        var frontier = seeds
+        repeat(MAX_EMBEDDING_DEPTH) {
+            val next = frontier.asSequence()
+                .mapNotNull { it.name }
+                .flatMap { GoMethodSpecInheritanceIndex.find(it, project, scope).asSequence() }
+                .mapNotNull { PsiTreeUtil.getParentOfType(it, GoTypeSpec::class.java) }
+                .filter { all.add(it) }
+                .toList()
+            if (next.isEmpty()) return all.toList()
+            frontier = next
+        }
+        return all.toList()
+    }
+
+    /** Interface declarations containing a method spec named by any of [methodNames]. */
+    private fun interfacesDeclaringAny(
+        project: Project,
+        scope: GlobalSearchScope,
+        methodNames: Set<String>,
+    ): List<GoTypeSpec> {
+        val keys = StubIndex.getInstance()
+            .getAllKeys(GoMethodSpecFingerprintIndex.KEY, project)
+            .filter { it.substringBefore('/') in methodNames }
+
+        val owners = LinkedHashSet<GoTypeSpec>()
+        for (key in keys) {
+            GoMethodSpecFingerprintIndex.process(
+                key, project, scope,
+                Processor { spec ->
+                    PsiTreeUtil.getParentOfType(spec, GoTypeSpec::class.java)?.let(owners::add)
+                    true
+                },
+            )
+        }
+        return owners.toList()
+    }
+
+    /**
      * Types declaring a method called [methodName].
      *
      * `GoMethodFingerprintIndex` is keyed by `name/arity` (`Area/0`). Rather than computing
@@ -139,8 +242,8 @@ class GoInterfaceFactsImpl : GoInterfaceFacts {
             }
             if (isPointerReceiver(impl)) pointerOnly += name
 
-            val want = normalizeSignature(spec.signature?.text)
-            val got = normalizeSignature(impl.signature?.text)
+            val want = signatureShape(spec.signature)
+            val got = signatureShape(impl.signature)
             if (want != got) {
                 mismatched += GoMethodRequirement(
                     name = name,
@@ -167,7 +270,43 @@ class GoInterfaceFactsImpl : GoInterfaceFacts {
     private fun isPointerReceiver(method: GoMethodDeclaration): Boolean =
         method.receiver?.type?.text?.trimStart()?.startsWith("*") == true
 
-    /** Signatures differ in whitespace; compare with runs collapsed. */
-    private fun normalizeSignature(text: String?): String =
-        text.orEmpty().replace(Regex("\\s+"), " ").trim()
+    /**
+     * Renders a signature as parameter and result types alone.
+     *
+     * Comparing signature text is wrong: Go ignores parameter names when deciding whether a
+     * method satisfies an interface, so `Read(p []byte)` and `Read(b []byte)` are the same
+     * method. Comparing the raw text marked every such pair as a mismatch.
+     *
+     * Type identity is still textual, so a declaration written as `[]uint8` will not match one
+     * written as `[]byte`. Resolving those to canonical types is a deeper change; the shape
+     * comparison already covers the case that actually occurs in practice.
+     */
+    private fun signatureShape(signature: GoSignature?): String {
+        if (signature == null) return ""
+        val params = parameterTypes(signature.parameters)
+        val result = signature.result
+        val results = when {
+            result == null || result.isVoid -> emptyList()
+            result.parameters != null -> parameterTypes(result.parameters)
+            else -> listOfNotNull(typeText(result.type).takeIf { it.isNotEmpty() })
+        }
+        return "(${params.joinToString(",")})(${results.joinToString(",")})"
+    }
+
+    /** Expands grouped declarations: `a, b int` counts as two parameters of type int. */
+    private fun parameterTypes(parameters: GoParameters?): List<String> {
+        if (parameters == null) return emptyList()
+        return parameters.parameterDeclarationList.flatMap { declaration ->
+            val rendered = typeText(declaration.type) + if (declaration.isVariadic) "..." else ""
+            val count = maxOf(1, declaration.paramDefinitionList.size)
+            List(count) { rendered }
+        }
+    }
+
+    private fun typeText(type: GoType?): String =
+        type?.text?.replace(Regex("\\s+"), " ")?.trim().orEmpty()
+
+    private companion object {
+        const val MAX_EMBEDDING_DEPTH = 8
+    }
 }

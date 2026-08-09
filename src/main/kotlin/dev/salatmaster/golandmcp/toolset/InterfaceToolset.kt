@@ -33,6 +33,24 @@ data class GoImplementationsResult(
 )
 
 @Serializable
+data class GoSatisfiedInterfaceEntry(
+    val interfaceName: String,
+    val qualifiedName: String,
+    val packagePath: String,
+    val location: String,
+    /** True when only the pointer form satisfies this interface. */
+    val requiresPointer: Boolean,
+)
+
+@Serializable
+data class GoInterfacesOfResult(
+    val typeName: String,
+    val interfaces: List<GoSatisfiedInterfaceEntry>,
+    val truncated: Boolean,
+    val hint: String,
+)
+
+@Serializable
 data class GoSignatureMismatch(
     val method: String,
     val required: String,
@@ -109,6 +127,59 @@ class InterfaceToolset : McpToolset {
             hint = if (truncated) {
                 "More implementations exist than were returned; the count is unknown. " +
                     "Project types are listed first. Raise limit to see more."
+            } else {
+                ""
+            },
+        )
+    }
+
+    @McpTool
+    @McpDescription(
+        "List the interfaces a Go type satisfies. Because Go interfaces are structural, a " +
+            "type implements them without naming them anywhere, so this cannot be read off " +
+            "the source. Useful for learning what a type can be passed as, and which " +
+            "contracts a change to its methods would break.",
+    )
+    suspend fun go_interfaces_of(
+        @McpDescription("Type name, e.g. 'Rect'")
+        typeName: String,
+        @McpDescription("Maximum number of interfaces to return")
+        limit: Int,
+    ): GoInterfacesOfResult =
+        interfacesOf(currentCoroutineContext().project, typeName, limit)
+
+    /** Testable core; the project is explicit so tests need no MCP call context. */
+    internal suspend fun interfacesOf(
+        project: Project,
+        typeName: String,
+        limit: Int,
+    ): GoInterfacesOfResult {
+        if (limit <= 0) mcpFail("limit must be positive, got $limit")
+
+        val found = readAction { facts.interfacesOf(project, typeName, limit + 1) }
+        if (found.isEmpty()) {
+            mcpFail(
+                "No type named '$typeName' was found, or it satisfies no interface. " +
+                    "Note that a type with no methods satisfies only the empty interface.",
+            )
+        }
+
+        val truncated = found.size > limit
+        return GoInterfacesOfResult(
+            typeName = typeName,
+            interfaces = found.take(limit).map {
+                GoSatisfiedInterfaceEntry(
+                    interfaceName = it.interfaceName,
+                    qualifiedName = it.qualifiedName,
+                    packagePath = it.packagePath,
+                    location = it.location,
+                    requiresPointer = it.requiresPointer,
+                )
+            },
+            truncated = truncated,
+            hint = if (truncated) {
+                "More interfaces exist than were returned; the count is unknown. " +
+                    "Project interfaces are listed first. Raise limit to see more."
             } else {
                 ""
             },
