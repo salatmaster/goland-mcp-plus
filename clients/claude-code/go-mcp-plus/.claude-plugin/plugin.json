@@ -1,0 +1,14 @@
+{
+  "name": "go-mcp-plus",
+  "displayName": "Go MCP++",
+  "version": "0.1.0",
+  "description": "Skills that route Go questions to the Go MCP++ tools exposed by GoLand, so answers come from the Go type system rather than from text search",
+  "author": {
+    "name": "salatmaster",
+    "url": "https://github.com/salatmaster"
+  },
+  "homepage": "https://github.com/salatmaster/goland-mcp-plus",
+  "repository": "https://github.com/salatmaster/goland-mcp-plus",
+  "license": "MIT",
+  "keywords": ["go", "golang", "goland", "jetbrains", "mcp", "refactoring", "interfaces"]
+}
