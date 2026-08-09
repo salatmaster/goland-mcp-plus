@@ -7,15 +7,15 @@ import com.goide.psi.GoTypeSpec
 import com.goide.stubs.index.GoFunctionIndex
 import com.goide.stubs.index.GoTypesIndex
 import com.intellij.openapi.project.Project
-import com.intellij.psi.PsiComment
 import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiWhiteSpace
 import com.intellij.psi.search.GlobalSearchScope
 import dev.salatmaster.golandmcp.common.SymbolRef
 import dev.salatmaster.golandmcp.common.formatLocation
 import dev.salatmaster.golandmcp.common.projectFirst
 
-class GoSymbolsImpl : GoSymbols {
+class GoSymbolsImpl(
+    private val docs: GoDocs = GoDocsImpl(),
+) : GoSymbols {
 
     override fun lookup(project: Project, ref: SymbolRef): GoLookupResult = guardGoApi("lookup") {
         val scope = GlobalSearchScope.allScope(project)
@@ -84,7 +84,7 @@ class GoSymbolsImpl : GoSymbols {
             qualifiedName = element.qualifiedName.orEmpty(),
             packagePath = element.containingFile.getImportPath(false).orEmpty(),
             signature = signatureOf(element),
-            doc = docCommentOf(element),
+            doc = docs.docComment(element),
             location = formatLocation(project, element),
             exported = element.isPublic,
             deprecated = element.isDeprecated,
@@ -102,26 +102,4 @@ class GoSymbolsImpl : GoSymbols {
         else -> element.text.substringBefore('{').trim()
     }
 
-    /**
-     * Go doc comments are the contiguous run of `//` lines directly above a declaration.
-     *
-     * The comment attaches to the enclosing declaration rather than to the spec, so when
-     * nothing is found on the element itself the search continues from its parent.
-     */
-    private fun docCommentOf(element: PsiElement): String? =
-        commentsAbove(element) ?: element.parent?.let { commentsAbove(it) }
-
-    private fun commentsAbove(element: PsiElement): String? {
-        val lines = ArrayDeque<String>()
-        var sibling: PsiElement? = element.prevSibling
-        while (sibling != null) {
-            when {
-                sibling is PsiComment -> lines.addFirst(sibling.text.removePrefix("//").trim())
-                sibling is PsiWhiteSpace && sibling.text.count { it == '\n' } <= 1 -> Unit
-                else -> break
-            }
-            sibling = sibling.prevSibling
-        }
-        return lines.takeIf { it.isNotEmpty() }?.joinToString(" ")
-    }
 }

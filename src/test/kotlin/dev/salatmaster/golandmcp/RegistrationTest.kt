@@ -3,6 +3,7 @@ package dev.salatmaster.golandmcp
 import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import dev.salatmaster.golandmcp.toolset.InterfaceToolset
+import dev.salatmaster.golandmcp.toolset.PackageToolset
 import dev.salatmaster.golandmcp.toolset.SymbolToolset
 import kotlinx.serialization.Serializable
 import kotlin.reflect.full.findAnnotation
@@ -17,7 +18,8 @@ import kotlin.reflect.jvm.jvmErasure
  */
 class RegistrationTest : BasePlatformTestCase() {
 
-    private val toolsets = listOf(SymbolToolset::class, InterfaceToolset::class)
+    private val toolsets =
+        listOf(SymbolToolset::class, InterfaceToolset::class, PackageToolset::class)
 
     fun `test every toolset named in plugin xml is instantiable`() {
         val xml = javaClass.classLoader.getResource("META-INF/plugin.xml")!!.readText()
