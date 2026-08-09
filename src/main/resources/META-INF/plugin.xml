@@ -3,9 +3,35 @@
     <name>Go MCP++</name>
     <vendor url="https://github.com/salatmaster/goland-mcp-plus">salatmaster</vendor>
     <description><![CDATA[
-        Extends the built-in JetBrains MCP server with Go semantic tools:
-        interface implementations, interface satisfaction diagnostics, and
-        symbol lookup by human-readable reference.
+        <p><b>Go semantic tools for the MCP server built into GoLand.</b> 24 tools that answer
+        questions about Go code the way the IDE answers them &mdash; through the type system,
+        rather than through text search.</p>
+
+        <p>GoLand already exposes file reading, text search and patching over MCP. What it does
+        not expose is the Go type system. Go has no <code>implements</code> keyword, so which
+        types satisfy an interface is recorded nowhere in the source &mdash; that answer exists
+        only inside the IDE, and no amount of grepping recovers it.</p>
+
+        <ul>
+            <li><b>Interfaces</b> &mdash; who implements one, which ones a type satisfies, and
+            why a type does not, including the pointer-receiver case the compiler will not
+            distinguish for you.</li>
+            <li><b>Understanding code</b> &mdash; resolve a symbol, read its doc and source, list
+            a package's API with struct tags, find usages classified as call, read or write.</li>
+            <li><b>Changing code</b> &mdash; change a signature and every call site with it,
+            safe-delete, inline, move files between packages, fix imports. Every change lands on
+            the IDE's undo stack.</li>
+            <li><b>Generating</b> &mdash; interface stubs, an interface extracted from a type,
+            Go structs from a JSON sample, table-driven test scaffolding.</li>
+            <li><b>Toolchain</b> &mdash; run tests, builds, vet and module commands, returning
+            structured failures rather than a log to re-read.</li>
+        </ul>
+
+        <p>Nothing is transmitted anywhere. Usage counters under
+        <b>Settings | Tools | Go MCP++</b> are held in memory for the session only.</p>
+
+        <p><a href="https://github.com/salatmaster/goland-mcp-plus">Documentation and agent
+        skills for Claude Code and Codex</a></p>
     ]]></description>
 
     <depends>com.intellij.modules.platform</depends>

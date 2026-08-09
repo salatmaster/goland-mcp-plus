@@ -40,6 +40,23 @@ intellijPlatform {
     // minute on every build.
     buildSearchableOptions = false
 
+    // All three read from the environment, so they are inert locally and configured by
+    // the release workflow. Signing is what the Marketplace requires of an update to an
+    // already-signed plugin; publishing needs a token that must never live in the repo.
+    signing {
+        certificateChain = providers.environmentVariable("CERTIFICATE_CHAIN")
+        privateKey = providers.environmentVariable("PRIVATE_KEY")
+        password = providers.environmentVariable("PRIVATE_KEY_PASSWORD")
+    }
+
+    publishing {
+        token = providers.environmentVariable("PUBLISH_TOKEN")
+    }
+
+    pluginVerification {
+        ides { recommended() }
+    }
+
     pluginConfiguration {
         ideaVersion {
             sinceBuild = "262"
