@@ -10,4 +10,12 @@ import dev.salatmaster.golandmcp.common.SymbolRef
  */
 interface GoSymbols {
     fun lookup(project: Project, ref: SymbolRef): GoLookupResult
+
+    /**
+     * The full source text of a symbol's declaration, with its doc comment.
+     *
+     * Reading dependency or standard-library code otherwise means knowing where the module
+     * cache put it; this resolves the symbol and returns the declaration directly.
+     */
+    fun sourceOf(project: Project, ref: SymbolRef): GoSourceResult?
 }

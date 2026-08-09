@@ -20,3 +20,14 @@ sealed interface GoLookupResult {
     data class Ambiguous(val candidates: List<GoSymbolInfo>) : GoLookupResult
     data object NotFound : GoLookupResult
 }
+
+/** A symbol's declaration as written, plus where it lives. */
+data class GoSourceResult(
+    val qualifiedName: String,
+    val packagePath: String,
+    val location: String,
+    val doc: String,
+    val source: String,
+    /** True when the declaration is outside the project (SDK or a dependency). */
+    val external: Boolean,
+)

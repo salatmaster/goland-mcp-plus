@@ -1,5 +1,6 @@
 package dev.salatmaster.golandmcp.go
 
+import com.goide.psi.GoFile
 import com.goide.psi.GoInterfaceType
 import com.goide.psi.GoMethodDeclaration
 import com.goide.psi.GoNamedElement
@@ -11,6 +12,7 @@ import com.intellij.psi.PsiElement
 import com.intellij.psi.search.GlobalSearchScope
 import dev.salatmaster.golandmcp.common.SymbolRef
 import dev.salatmaster.golandmcp.common.formatLocation
+import dev.salatmaster.golandmcp.common.isInProjectContent
 import dev.salatmaster.golandmcp.common.projectFirst
 
 class GoSymbolsImpl(
@@ -35,6 +37,38 @@ class GoSymbolsImpl(
             1 -> GoLookupResult.Found(describe(project, ranked.single()))
             else -> GoLookupResult.Ambiguous(ranked.map { describe(project, it) })
         }
+    }
+
+    override fun sourceOf(project: Project, ref: SymbolRef): GoSourceResult? =
+        guardGoApi("source of") {
+            val found = lookupElement(project, ref) ?: return@guardGoApi null
+
+            // The declaration, not the spec: `type Rect struct{...}` reads as Go, whereas the
+            // spec alone drops the leading `type` keyword.
+            val declaration = generateSequence(found as PsiElement) { it.parent }
+                .takeWhile { it !is GoFile }
+                .lastOrNull { it.text.isNotBlank() }
+                ?: found
+
+            GoSourceResult(
+                qualifiedName = found.qualifiedName.orEmpty(),
+                packagePath = found.containingFile.getImportPath(false).orEmpty(),
+                location = formatLocation(project, found),
+                doc = docs.docComment(found).orEmpty(),
+                source = declaration.text.trim(),
+                external = !isInProjectContent(project, found),
+            )
+        }
+
+    private fun lookupElement(project: Project, ref: SymbolRef): GoNamedElement? {
+        val scope = GlobalSearchScope.allScope(project)
+        val candidates = when (ref) {
+            is SymbolRef.Bare -> lookupByName(project, scope, ref.typeName, ref.memberName)
+            is SymbolRef.Qualified -> lookupByName(project, scope, ref.typeName, ref.memberName)
+                .filter { matchesPackage(it, ref.packagePath) }
+            is SymbolRef.AtPosition -> emptyList()
+        }
+        return candidates.projectFirst(project).firstOrNull()
     }
 
     /**

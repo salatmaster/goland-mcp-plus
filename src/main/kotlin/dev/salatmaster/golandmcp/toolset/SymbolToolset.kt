@@ -11,6 +11,7 @@ import dev.salatmaster.golandmcp.common.SymbolRefParseException
 import dev.salatmaster.golandmcp.common.parseSymbolRef
 import dev.salatmaster.golandmcp.go.GoLookupResult
 import dev.salatmaster.golandmcp.go.GoSymbolInfo
+import dev.salatmaster.golandmcp.go.GoSourceResult
 import dev.salatmaster.golandmcp.go.GoSymbolsImpl
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.serialization.Serializable
@@ -28,6 +29,26 @@ data class GoSymbolResult(
     val deprecated: Boolean,
     /** Populated only when the reference matched more than one symbol. */
     val candidates: List<String>,
+)
+
+@Serializable
+data class GoSourceOfResult(
+    val qualifiedName: String,
+    val packagePath: String,
+    val location: String,
+    val doc: String,
+    val source: String,
+    /** True when the declaration is outside the project (SDK or a dependency). */
+    val external: Boolean,
+)
+
+@Serializable
+data class GoDocResult(
+    val qualifiedName: String,
+    val packagePath: String,
+    val location: String,
+    val signature: String,
+    val doc: String,
 )
 
 class SymbolToolset : McpToolset {
@@ -71,7 +92,67 @@ class SymbolToolset : McpToolset {
             )
         }
     }
+
+    @McpTool
+    @McpDescription(
+        "Read the doc comment and signature of a Go symbol, including symbols from the " +
+            "standard library and dependencies. Use this instead of recalling an API from " +
+            "memory: it reports what the installed version actually declares.",
+    )
+    suspend fun go_doc(
+        @McpDescription("Symbol reference, e.g. 'net/http.Client.Do' or 'Rect.Area'")
+        reference: String,
+    ): GoDocResult = doc(currentCoroutineContext().project, reference)
+
+    /** Testable core; the project is explicit so tests need no MCP call context. */
+    internal suspend fun doc(project: Project, reference: String): GoDocResult {
+        val info = symbolInfo(project, reference)
+        return GoDocResult(
+            qualifiedName = info.qualifiedName,
+            packagePath = info.packagePath,
+            location = info.location,
+            signature = info.signature,
+            doc = info.doc,
+        )
+    }
+
+    @McpTool
+    @McpDescription(
+        "Return the full source of a Go symbol's declaration, including symbols from the " +
+            "standard library and dependencies. Those live in the module cache rather than " +
+            "the project tree, so reading them normally means knowing where the toolchain " +
+            "put them.",
+    )
+    suspend fun go_source_of(
+        @McpDescription("Symbol reference, e.g. 'net/http.Client' or 'Rect.Area'")
+        reference: String,
+    ): GoSourceOfResult = sourceOf(currentCoroutineContext().project, reference)
+
+    /** Testable core; the project is explicit so tests need no MCP call context. */
+    internal suspend fun sourceOf(project: Project, reference: String): GoSourceOfResult {
+        val ref = try {
+            parseSymbolRef(reference)
+        } catch (e: SymbolRefParseException) {
+            mcpFail(e.message ?: "Could not parse '$reference'")
+        }
+
+        val result = readAction { symbols.sourceOf(project, ref) }
+            ?: mcpFail(
+                "No Go symbol matches '$reference'. Check the spelling, or qualify it with a " +
+                    "package path such as 'net/http.Client'.",
+            )
+        return result.toResult()
+    }
 }
+
+private fun GoSourceResult.toResult() = GoSourceOfResult(
+    qualifiedName = qualifiedName,
+    packagePath = packagePath,
+    location = location,
+    doc = doc,
+    source = source,
+    external = external,
+)
 
 private fun GoSymbolInfo.toResult(candidates: List<String>) = GoSymbolResult(
     kind = kind.name,
