@@ -6,6 +6,7 @@ import dev.salatmaster.golandmcp.toolset.BatchToolset
 import dev.salatmaster.golandmcp.toolset.InterfaceToolset
 import dev.salatmaster.golandmcp.toolset.PackageToolset
 import dev.salatmaster.golandmcp.toolset.SymbolToolset
+import dev.salatmaster.golandmcp.toolset.ToolchainToolset
 import dev.salatmaster.golandmcp.toolset.UsagesToolset
 import kotlinx.serialization.Serializable
 import kotlin.reflect.full.findAnnotation
@@ -27,6 +28,7 @@ class RegistrationTest : BasePlatformTestCase() {
             PackageToolset::class,
             UsagesToolset::class,
             BatchToolset::class,
+            ToolchainToolset::class,
         )
 
     fun `test every toolset named in plugin xml is instantiable`() {
