@@ -23,6 +23,8 @@ data class GoSatisfaction(
     val missing: List<String>,
     val pointerOnly: List<String>,
     val mismatched: List<GoMethodRequirement>,
+    /** Signatures of the missing methods, in interface order, ready for stub generation. */
+    val missingSignatures: List<GoMethodRequirement> = emptyList(),
 )
 
 /** An interface a given type satisfies. */

@@ -230,6 +230,7 @@ class GoInterfaceFactsImpl : GoInterfaceFacts {
             .toMap()
 
         val missing = mutableListOf<String>()
+        val missingSignatures = mutableListOf<GoMethodRequirement>()
         val pointerOnly = mutableListOf<String>()
         val mismatched = mutableListOf<GoMethodRequirement>()
 
@@ -238,6 +239,12 @@ class GoInterfaceFactsImpl : GoInterfaceFacts {
             val impl = provided[name]
             if (impl == null) {
                 missing += name
+                missingSignatures += GoMethodRequirement(
+                    name = name,
+                    signature = spec.signature?.text?.replace(Regex("\\s+"), " ")?.trim().orEmpty(),
+                    satisfiedBy = null,
+                    pointerReceiverOnly = false,
+                )
                 continue
             }
             if (isPointerReceiver(impl)) pointerOnly += name
@@ -264,6 +271,7 @@ class GoInterfaceFactsImpl : GoInterfaceFacts {
             missing = missing,
             pointerOnly = pointerOnly,
             mismatched = mismatched,
+            missingSignatures = missingSignatures,
         )
     }
 

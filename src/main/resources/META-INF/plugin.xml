@@ -19,5 +19,6 @@
         <mcpServer.mcpToolset implementation="dev.salatmaster.golandmcp.toolset.UsagesToolset"/>
         <mcpServer.mcpToolset implementation="dev.salatmaster.golandmcp.toolset.BatchToolset"/>
         <mcpServer.mcpToolset implementation="dev.salatmaster.golandmcp.toolset.ToolchainToolset"/>
+        <mcpServer.mcpToolset implementation="dev.salatmaster.golandmcp.toolset.GenerationToolset"/>
     </extensions>
 </idea-plugin>
