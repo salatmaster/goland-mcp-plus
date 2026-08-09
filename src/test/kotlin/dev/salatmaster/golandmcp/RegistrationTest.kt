@@ -6,6 +6,7 @@ import dev.salatmaster.golandmcp.toolset.BatchToolset
 import dev.salatmaster.golandmcp.toolset.GenerationToolset
 import dev.salatmaster.golandmcp.toolset.InterfaceToolset
 import dev.salatmaster.golandmcp.toolset.PackageToolset
+import dev.salatmaster.golandmcp.toolset.RefactoringToolset
 import dev.salatmaster.golandmcp.toolset.SymbolToolset
 import dev.salatmaster.golandmcp.toolset.ToolchainToolset
 import dev.salatmaster.golandmcp.toolset.UsagesToolset
@@ -31,6 +32,7 @@ class RegistrationTest : BasePlatformTestCase() {
             BatchToolset::class,
             ToolchainToolset::class,
             GenerationToolset::class,
+            RefactoringToolset::class,
         )
 
     fun `test every toolset named in plugin xml is instantiable`() {
