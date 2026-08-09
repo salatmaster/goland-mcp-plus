@@ -65,4 +65,39 @@ class RefactoringToolsetTest : GoMcpToolTestCase() {
             result.hint.contains("nosuchdir"),
         )
     }
+
+    fun `test inlines a function into its call sites`() {
+        loadFixture("basic")
+        val batch = BatchToolset()
+
+        val result = callTool { toolset.inline(project, "double", removeDeclaration = true) }
+
+        assertTrue("inlining should succeed, hint was: ${result.hint}", result.inlined)
+
+        val content = callTool { batch.readFiles(project, listOf("inline.go")) }.files.single().content
+        assertFalse("calls should be gone, file was:\n$content", content.contains("double(2)"))
+        assertFalse("declaration should be removed, file was:\n$content", content.contains("func double("))
+    }
+
+    fun `test inline keeps the declaration when asked`() {
+        loadFixture("basic")
+        val batch = BatchToolset()
+
+        val result = callTool { toolset.inline(project, "double", removeDeclaration = false) }
+
+        assertTrue("inlining should succeed, hint was: ${result.hint}", result.inlined)
+        val content = callTool { batch.readFiles(project, listOf("inline.go")) }.files.single().content
+        assertTrue("declaration should remain, file was:\n$content", content.contains("func double("))
+    }
+
+    fun `test inline rejects a non function symbol`() {
+        loadFixture("basic")
+        val error = org.junit.Assert.assertThrows(Exception::class.java) {
+            callTool { toolset.inline(project, "Rect", removeDeclaration = false) }
+        }
+        assertTrue(
+            "error should explain what was wrong, was: ${error.message}",
+            error.message!!.contains("not a function"),
+        )
+    }
 }

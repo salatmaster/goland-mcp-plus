@@ -15,6 +15,8 @@ import com.intellij.refactoring.safeDelete.SafeDeleteProcessor
 import dev.salatmaster.golandmcp.common.SymbolRefParseException
 import dev.salatmaster.golandmcp.common.parseSymbolRef
 import dev.salatmaster.golandmcp.common.resolveFile
+import com.goide.psi.GoFunctionOrMethodDeclaration
+import com.goide.refactor.inline.function.GoInlineFunctionProcessor
 import dev.salatmaster.golandmcp.go.GoSymbolsImpl
 import dev.salatmaster.golandmcp.go.GoUsagesImpl
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +37,14 @@ data class GoSafeDeleteResult(
     val deleted: Boolean,
     /** Populated when the deletion was refused because the symbol is still referenced. */
     val blockingUsages: List<GoBlockingUsage>,
+    val hint: String,
+)
+
+@Serializable
+data class GoInlineResult(
+    val target: String,
+    val inlined: Boolean,
+    val declarationRemoved: Boolean,
     val hint: String,
 )
 
@@ -115,6 +125,60 @@ class RefactoringToolset : McpToolset {
                     GoSafeDeleteResult(
                         reference, false, emptyList(),
                         "The refactoring failed: ${error::class.simpleName}: ${error.message}",
+                    )
+                },
+            )
+        }
+    }
+
+    @McpTool
+    @McpDescription(
+        "Inline a Go function or method: replace every call with its body, substituting the " +
+            "arguments. Set removeDeclaration to delete the function afterwards. Doing this " +
+            "by hand means rewriting each call site consistently, which is where mistakes " +
+            "creep in.",
+    )
+    suspend fun go_inline(
+        @McpDescription("Function or method reference, e.g. 'double' or 'Rect.Area'")
+        reference: String,
+        @McpDescription("Delete the declaration once its calls have been inlined")
+        removeDeclaration: Boolean,
+    ): GoInlineResult = inline(currentCoroutineContext().project, reference, removeDeclaration)
+
+    /** Testable core; the project is explicit so tests need no MCP call context. */
+    internal suspend fun inline(
+        project: Project,
+        reference: String,
+        removeDeclaration: Boolean,
+    ): GoInlineResult {
+        val ref = try {
+            parseSymbolRef(reference)
+        } catch (e: SymbolRefParseException) {
+            mcpFail(e.message ?: "Could not parse '$reference'")
+        }
+
+        val declaration = readAction { symbols.declaration(project, ref) }
+            ?: mcpFail("No Go symbol matches '$reference'.")
+
+        val function = declaration as? GoFunctionOrMethodDeclaration
+            ?: mcpFail(
+                "'$reference' is a ${declaration::class.simpleName}, not a function or method; " +
+                    "only those can be inlined.",
+            )
+
+        return withContext(Dispatchers.EDT) {
+            runCatching {
+                // Null reference means "inline every call site" rather than one occurrence.
+                // BaseRefactoringProcessor runs its own write action.
+                GoInlineFunctionProcessor(project, function, null, false, removeDeclaration).run()
+            }.fold(
+                onSuccess = {
+                    GoInlineResult(reference, true, removeDeclaration, "")
+                },
+                onFailure = { error ->
+                    GoInlineResult(
+                        reference, false, false,
+                        "Inlining failed: ${error::class.simpleName}: ${error.message}",
                     )
                 },
             )
