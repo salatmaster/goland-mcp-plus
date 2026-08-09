@@ -1,0 +1,13 @@
+.gradle/
+build/
+out/
+.idea/
+!.idea/runConfigurations/
+*.iml
+.kotlin/
+local.properties
+.DS_Store
+
+# Internal working documents, not part of the published project
+docs/superpowers/
+.claude/
