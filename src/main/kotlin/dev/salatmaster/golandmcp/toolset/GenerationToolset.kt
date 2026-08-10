@@ -325,10 +325,11 @@ class GenerationToolset : McpToolset {
      * Adds a hint only when the write succeeded.
      *
      * Overwriting it unconditionally would replace the reason a write failed with advice
-     * about the write that never happened.
+     * about the write that never happened, and would also bury the more specific note a
+     * newly created file already carries.
      */
     private fun GoGeneratedCode.withSuccessHint(hint: String): GoGeneratedCode =
-        if (applied) copy(hint = hint) else this
+        if (applied && this.hint.isEmpty()) copy(hint = hint) else this
 
     private suspend fun appendToFile(
         project: Project,
