@@ -1,41 +1,36 @@
 # Security
 
-## Reporting
-
 Report a vulnerability through
-[GitHub's private advisory form](https://github.com/salatmaster/goland-mcp-plus/security/advisories/new).
-Please do not open a public issue first.
+[GitHub's private advisory form](https://github.com/salatmaster/goland-mcp-plus/security/advisories/new)
+rather than a public issue. Expect an acknowledgement within a week.
 
-Expect an acknowledgement within a week.
+## What the tools can reach
 
-## What this plugin can do
+They are contributed to the MCP server built into your IDE, so anything that can
+talk to that server can call them, with the reach the IDE has:
 
-It contributes tools to the MCP server built into your JetBrains IDE. Anything that
-can talk to that server can call them, with the same reach the IDE has:
+- **Read** any file in an open project, its dependencies and its SDK.
+- **Modify** source: refactorings, generated code, batched edits. Every change goes
+  through a write command, so it is on the undo stack.
+- **Run the Go toolchain** — `test`, `build`, `vet`, `mod` — with the project's SDK,
+  in the project directory.
 
-- **Read** any file in an open project, and in its dependencies and SDK.
-- **Modify** source files: refactorings, generated code, batched text edits. Every
-  change goes through a write command, so it is on the IDE's undo stack.
-- **Run the Go toolchain**: `go test`, `go build`, `go vet`, `go mod`, using the
-  project's configured SDK, in the project directory.
+It opens no network connections of its own, reads no credentials, and starts no
+process other than the Go toolchain.
 
-It does not open network connections of its own, read credentials, or start
-processes other than the Go toolchain.
+## No data leaves the machine
 
-## What it never does
-
-- No telemetry. The usage counters under **Settings | Tools | Go MCP++** are held in
-  memory for the session, are never written to disk, and never leave the machine.
-- No data is sent anywhere. This plugin has no server component.
+The usage counters under **Settings | Tools | Go MCP++** live in memory for the
+session, are never written to disk, and are never transmitted. The plugin has no
+server component and no telemetry.
 
 ## Your exposure is the MCP server's exposure
 
-The plugin adds no transport. Who may reach the IDE's MCP server, and on what port,
-is decided by **Settings | Tools | MCP Server** — including the built-in tool filter
-and the confirmation prompt for terminal commands. Review those settings before
-connecting an agent you do not control, and be aware that enabling the MCP server
-grants access to *every* project open in that IDE.
+This plugin adds no transport. Who may reach the IDE's MCP server is decided by
+**Settings | Tools | MCP Server**, including its tool filter and the confirmation
+prompt for terminal commands. Review those before connecting an agent you do not
+control: enabling the server grants access to *every* project open in that IDE.
 
-`go_test` and the other toolchain tools execute the project's own code. That is what
-running tests means, and it is worth stating: pointing an agent at an untrusted
-repository and letting it run tests executes that repository's code on your machine.
+And `go_test` runs the project's own code. That is what running tests means — but
+it is worth stating that pointing an agent at an untrusted repository and letting it
+run tests executes that repository's code on your machine.

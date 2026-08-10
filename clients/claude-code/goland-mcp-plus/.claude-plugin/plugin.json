@@ -1,7 +1,7 @@
 {
-  "name": "go-mcp-plus",
-  "displayName": "Go MCP++",
-  "description": "Skills that route Go questions to the Go MCP++ tools exposed by GoLand, so answers come from the Go type system rather than from text search",
+  "name": "goland-mcp-plus",
+  "displayName": "Go MCP++ skills",
+  "description": "Skills and a session rule that route Go questions to the Go MCP++ tools exposed by GoLand, so answers come from the Go type system rather than from text search",
   "author": {
     "name": "salatmaster",
     "url": "https://github.com/salatmaster"

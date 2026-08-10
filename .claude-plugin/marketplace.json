@@ -1,5 +1,5 @@
 {
-  "name": "go-mcp-plus",
+  "name": "goland-mcp-plus",
   "description": "Agent skills for the Go MCP++ GoLand plugin: Go navigation, interface satisfaction, refactoring and testing driven through the IDE rather than through text search",
   "owner": {
     "name": "salatmaster",
@@ -7,8 +7,8 @@
   },
   "plugins": [
     {
-      "name": "go-mcp-plus",
-      "source": "./clients/claude-code/go-mcp-plus",
+      "name": "goland-mcp-plus",
+      "source": "./clients/claude-code/goland-mcp-plus",
       "description": "Teaches Claude Code to use the Go MCP++ tools in GoLand instead of grepping Go source",
       "author": {
         "name": "salatmaster"
