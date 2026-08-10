@@ -1,0 +1,19 @@
+{
+  "name": "goland-mcp-plus",
+  "interface": {
+    "displayName": "Go MCP++"
+  },
+  "plugins": [
+    {
+      "name": "goland-mcp-plus",
+      "source": {
+        "source": "local",
+        "path": "./plugins/goland-mcp-plus"
+      },
+      "policy": {
+        "installation": "AVAILABLE"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

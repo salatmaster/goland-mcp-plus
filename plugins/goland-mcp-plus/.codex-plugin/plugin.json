@@ -1,0 +1,36 @@
+{
+  "name": "goland-mcp-plus",
+  "description": "Skills that route Go questions to the Go MCP++ tools exposed by GoLand, so answers come from the Go type system rather than from text search",
+  "author": {
+    "name": "salatmaster",
+    "url": "https://github.com/salatmaster"
+  },
+  "homepage": "https://github.com/salatmaster/goland-mcp-plus",
+  "repository": "https://github.com/salatmaster/goland-mcp-plus",
+  "license": "Apache-2.0",
+  "keywords": [
+    "go",
+    "golang",
+    "goland",
+    "jetbrains",
+    "mcp",
+    "refactoring",
+    "interfaces"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Go MCP++ skills",
+    "shortDescription": "Make Codex reach for GoLand's Go tools instead of grep",
+    "longDescription": "The Go MCP++ GoLand plugin exposes Go navigation, interface satisfaction, refactoring and toolchain tools over the IDE's MCP server. A connected agent still reaches for grep, which in Go quietly gives wrong answers: interfaces are satisfied structurally, so nothing in the source says who implements what. These five skills route Go work to those tools instead. The MCP server itself is not bundled -- it is the IDE, on a port assigned per instance, so it is configured from Settings | Tools | MCP Server.",
+    "developerName": "salatmaster",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/salatmaster/goland-mcp-plus",
+    "defaultPrompt": [
+      "Which types implement this interface, and does the value type satisfy it or only the pointer?"
+    ]
+  }
+}

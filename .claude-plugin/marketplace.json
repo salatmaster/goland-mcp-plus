@@ -8,7 +8,7 @@
   "plugins": [
     {
       "name": "goland-mcp-plus",
-      "source": "./clients/claude-code/goland-mcp-plus",
+      "source": "./plugins/goland-mcp-plus",
       "description": "Teaches Claude Code to use the Go MCP++ tools in GoLand instead of grepping Go source",
       "author": {
         "name": "salatmaster"
