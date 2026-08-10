@@ -4,6 +4,7 @@ import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import dev.salatmaster.golandmcp.toolset.BatchToolset
 import dev.salatmaster.golandmcp.toolset.GenerationToolset
+import dev.salatmaster.golandmcp.toolset.InspectionToolset
 import dev.salatmaster.golandmcp.toolset.InterfaceToolset
 import dev.salatmaster.golandmcp.toolset.PackageToolset
 import dev.salatmaster.golandmcp.toolset.RefactoringToolset
@@ -33,6 +34,7 @@ class RegistrationTest : BasePlatformTestCase() {
             ToolchainToolset::class,
             GenerationToolset::class,
             RefactoringToolset::class,
+            InspectionToolset::class,
         )
 
     fun `test every toolset named in plugin xml is instantiable`() {

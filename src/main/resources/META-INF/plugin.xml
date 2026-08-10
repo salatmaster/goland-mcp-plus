@@ -60,5 +60,6 @@
         <mcpServer.mcpToolset implementation="dev.salatmaster.golandmcp.toolset.ToolchainToolset"/>
         <mcpServer.mcpToolset implementation="dev.salatmaster.golandmcp.toolset.GenerationToolset"/>
         <mcpServer.mcpToolset implementation="dev.salatmaster.golandmcp.toolset.RefactoringToolset"/>
+        <mcpServer.mcpToolset implementation="dev.salatmaster.golandmcp.toolset.InspectionToolset"/>
     </extensions>
 </idea-plugin>
