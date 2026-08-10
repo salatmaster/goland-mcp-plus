@@ -22,6 +22,8 @@ data class GoSymbolResult(
     val kind: String,
     val name: String,
     val qualifiedName: String,
+    /** A reference every tool here accepts and that identifies exactly this symbol. */
+    val reference: String,
     val packagePath: String,
     val signature: String,
     val doc: String,
@@ -35,6 +37,8 @@ data class GoSymbolResult(
 @Serializable
 data class GoSourceOfResult(
     val qualifiedName: String,
+    /** A reference every tool here accepts and that identifies exactly this symbol. */
+    val reference: String,
     val packagePath: String,
     val location: String,
     val doc: String,
@@ -46,6 +50,8 @@ data class GoSourceOfResult(
 @Serializable
 data class GoDocResult(
     val qualifiedName: String,
+    /** A reference every tool here accepts and that identifies exactly this symbol. */
+    val reference: String,
     val packagePath: String,
     val location: String,
     val signature: String,
@@ -87,7 +93,7 @@ class SymbolToolset : McpToolset {
         return when (val result = readAction { symbols.lookup(project, ref) }) {
             is GoLookupResult.Found -> result.symbol.toResult(emptyList())
             is GoLookupResult.Ambiguous -> result.candidates.first()
-                .toResult(result.candidates.map { "${it.qualifiedName} (${it.location})" })
+                .toResult(result.candidates.map { "${it.reference} (${it.location})" })
             GoLookupResult.NotFound -> mcpFail(
                 "No Go symbol matches '$reference'. Check the spelling, or qualify it with a " +
                     "package path such as 'net/http.Client'.",
@@ -112,6 +118,7 @@ class SymbolToolset : McpToolset {
         val info = symbolInfo(project, reference)
         return GoDocResult(
             qualifiedName = info.qualifiedName,
+            reference = info.reference,
             packagePath = info.packagePath,
             location = info.location,
             signature = info.signature,
@@ -151,6 +158,7 @@ class SymbolToolset : McpToolset {
 
 private fun GoSourceResult.toResult() = GoSourceOfResult(
     qualifiedName = qualifiedName,
+    reference = reference,
     packagePath = packagePath,
     location = location,
     doc = doc,
@@ -162,6 +170,7 @@ private fun GoSymbolInfo.toResult(candidates: List<String>) = GoSymbolResult(
     kind = kind.name,
     name = name,
     qualifiedName = qualifiedName,
+    reference = reference,
     packagePath = packagePath,
     signature = signature,
     doc = doc.orEmpty(),

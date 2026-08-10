@@ -1,15 +1,21 @@
 package dev.salatmaster.golandmcp.go
 
+import com.goide.psi.GoConstDefinition
 import com.goide.psi.GoFile
 import com.goide.psi.GoInterfaceType
 import com.goide.psi.GoMethodDeclaration
 import com.goide.psi.GoNamedElement
 import com.goide.psi.GoTypeSpec
+import com.goide.psi.GoVarDefinition
+import com.goide.stubs.index.GoAllPrivateNamesIndex
+import com.goide.stubs.index.GoAllPublicNamesIndex
 import com.goide.stubs.index.GoFunctionIndex
 import com.goide.stubs.index.GoTypesIndex
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiElement
 import com.intellij.psi.search.GlobalSearchScope
+import com.intellij.psi.stubs.StubIndex
+import com.intellij.util.Processor
 import dev.salatmaster.golandmcp.common.SymbolRef
 import dev.salatmaster.golandmcp.common.formatLocation
 import dev.salatmaster.golandmcp.common.isInProjectContent
@@ -47,6 +53,7 @@ class GoSymbolsImpl(
 
             GoSourceResult(
                 qualifiedName = found.qualifiedName.orEmpty(),
+                reference = referenceTo(found),
                 packagePath = found.containingFile.getImportPath(false).orEmpty(),
                 location = formatLocation(project, found),
                 doc = docs.docComment(found).orEmpty(),
@@ -115,7 +122,42 @@ class GoSymbolsImpl(
         }
         val types = GoTypesIndex.find(memberName, project, scope, null)
         val funcs = GoFunctionIndex.find(memberName, project, scope, null)
-        return (types + funcs).toList()
+        val declared = (types + funcs).toList()
+        // Only when nothing else matched: this one scans index keys, so it should not sit on
+        // the common path.
+        return declared.ifEmpty { packageLevelValues(project, scope, memberName) }
+    }
+
+    /**
+     * Package-level `var` and `const` declarations.
+     *
+     * They live in neither the type nor the function index, so every tool built on this
+     * lookup answered "no such symbol" for an ordinary `var ErrNotFound = ...`, while
+     * go_package_api listed it happily because it walks the file instead.
+     *
+     * The all-names indexes carry them, but keyed by `package.Name` rather than the bare
+     * name, so a bare lookup has to find the key first.
+     */
+    private fun packageLevelValues(
+        project: Project,
+        scope: GlobalSearchScope,
+        name: String,
+    ): List<GoNamedElement> {
+        val index = StubIndex.getInstance()
+        val found = mutableListOf<GoNamedElement>()
+        val collect = Processor<GoNamedElement> { element ->
+            if (element is GoVarDefinition || element is GoConstDefinition) found += element
+            true
+        }
+
+        for (indexKey in listOf(GoAllPublicNamesIndex.ALL_PUBLIC_NAMES, GoAllPrivateNamesIndex.ALL_PRIVATE_NAMES)) {
+            val suffix = ".$name"
+            for (key in index.getAllKeys(indexKey, project)) {
+                if (key != name && !key.endsWith(suffix)) continue
+                index.processElements(indexKey, key, project, scope, GoNamedElement::class.java, collect)
+            }
+        }
+        return found
     }
 
     private fun matchesPackage(element: GoNamedElement, packagePath: String): Boolean {
@@ -133,6 +175,29 @@ class GoSymbolsImpl(
         return file.packageName == normalized
     }
 
+    /**
+     * Builds `<import path>.<Type>[.<Member>]` — the one form every tool here accepts.
+     *
+     * Falls back to the package clause when the import path is unknown, which happens for a
+     * file whose module has not been resolved.
+     */
+    private fun referenceTo(element: GoNamedElement): String {
+        val file = element.containingFile as? GoFile
+        val pkg = file?.getImportPath(false)?.takeIf { it.isNotEmpty() }
+            ?: file?.packageName.orEmpty()
+        val owner = (element as? GoMethodDeclaration)
+            ?.receiverType
+            ?.text
+            ?.removePrefix("*")
+            ?.substringAfterLast('.')
+            ?.trim()
+            .orEmpty()
+
+        return listOf(pkg, owner, element.name.orEmpty())
+            .filter { it.isNotEmpty() }
+            .joinToString(".")
+    }
+
     private fun describe(project: Project, element: GoNamedElement): GoSymbolInfo {
         val kind = when {
             element is GoTypeSpec && element.specType?.type is GoInterfaceType -> GoSymbolKind.INTERFACE
@@ -144,6 +209,7 @@ class GoSymbolsImpl(
             kind = kind,
             name = element.name.orEmpty(),
             qualifiedName = element.qualifiedName.orEmpty(),
+            reference = referenceTo(element),
             packagePath = element.containingFile.getImportPath(false).orEmpty(),
             signature = signatureOf(element),
             doc = docs.docComment(element),
