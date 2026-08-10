@@ -77,9 +77,17 @@ codex plugin marketplace add salatmaster/goland-mcp-plus
 codex plugin add goland-mcp-plus@goland-mcp-plus
 ```
 
-For any other agent, the same guidance in one page: paste
-[`clients/claude-code/CLAUDE.md`](clients/claude-code/CLAUDE.md) into whatever
-always-in-context rules file it has.
+| Skill | Fires on |
+| --- | --- |
+| `go-mcp` | any work in a Go codebase; routes to the rest |
+| `go-navigation` | finding a declaration, an API, callers |
+| `go-interfaces` | who implements what, and why something does not |
+| `go-refactoring` | signature changes, safe delete, inline, moves |
+| `go-testing` | tests, builds, vet, modules |
+
+For an agent with no skills mechanism, the same guidance is one page: paste
+[`docs/agent-rules.md`](docs/agent-rules.md) into whatever file it always has in
+context.
 
 ## Tools
 
