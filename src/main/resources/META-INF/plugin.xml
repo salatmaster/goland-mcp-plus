@@ -3,9 +3,10 @@
     <name>Go MCP++</name>
     <vendor url="https://github.com/salatmaster/goland-mcp-plus">salatmaster</vendor>
     <description><![CDATA[
-        <p><b>Go semantic tools for the MCP server built into GoLand.</b> 24 tools that answer
-        questions about Go code the way the IDE answers them &mdash; through the type system,
-        rather than through text search.</p>
+        <p><b>Your agent stops grepping Go and starts asking the compiler.</b> 24 tools that
+        answer questions about Go code the way the IDE answers them &mdash; through the type
+        system, rather than through text search &mdash; added to the MCP server built into
+        GoLand.</p>
 
         <p>GoLand already exposes file reading, text search and patching over MCP. What it does
         not expose is the Go type system. Go has no <code>implements</code> keyword, so which
@@ -14,8 +15,10 @@
 
         <ul>
             <li><b>Interfaces</b> &mdash; who implements one, which ones a type satisfies, and
-            why a type does not, including the pointer-receiver case the compiler will not
-            distinguish for you.</li>
+            why a type does not. Including the two cases that are invisible to search: a type
+            that declares no method at all and gains the whole set by embedding, and the
+            pointer-receiver trap, where <code>*T</code> satisfies and <code>T</code> does
+            not.</li>
             <li><b>Understanding code</b> &mdash; resolve a symbol, read its doc and source, list
             a package's API with struct tags, find usages classified as call, read or write.</li>
             <li><b>Changing code</b> &mdash; change a signature and every call site with it,
@@ -26,6 +29,10 @@
             <li><b>Toolchain</b> &mdash; run tests, builds, vet and module commands, returning
             structured failures rather than a log to re-read.</li>
         </ul>
+
+        <p>Requires the bundled <b>MCP Server</b> and <b>Go</b> plugins, and an agent connected
+        to the IDE. <b>Settings | Tools | MCP Server</b> configures that for Claude Code, Codex,
+        Cursor and others.</p>
 
         <p>Nothing is transmitted anywhere. Usage counters under
         <b>Settings | Tools | Go MCP++</b> are held in memory for the session only.</p>
