@@ -1,9 +1,15 @@
-<!-- Append to your project's AGENTS.md when GoLand's MCP server is connected. -->
+<!--
+For an agent with no skills mechanism. Paste the section below into whatever file it
+always has in context: CLAUDE.md, AGENTS.md, .cursorrules, .windsurfrules.
+
+Claude Code and Codex do not need this — install the plugin instead, and they get the
+same guidance as five skills that carry the argument shapes and the traps as well.
+-->
 
 ## Go tooling
 
-This project is open in GoLand with the Go MCP++ plugin, which exposes `go_*`
-MCP tools that resolve through the Go type system. Prefer them over shell tools:
+This project is open in GoLand with the Go MCP++ plugin, which exposes `go_*` MCP
+tools that resolve through the Go type system. Prefer them over shell tools:
 
 - **Finding code**: `go_symbol`, `go_doc`, `go_source_of`, `go_package_api`,
   `go_find_usages`. Do not grep for a Go declaration — text search cannot
