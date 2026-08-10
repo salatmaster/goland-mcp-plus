@@ -16,6 +16,24 @@ than in a real project. Where that matters, the test says so.
 one that deleted an unrelated const, var and import. Run the tools against a real
 project before believing them.
 
+## Releasing
+
+```bash
+gh workflow run release.yml -f version=0.1.3
+```
+
+That is the whole release. The workflow cuts `[Unreleased]` into `## [0.1.3] - <date>`,
+fixes the compare links, runs the suite, builds, and only then commits, tags and
+publishes — so a red build leaves `main` untouched, and the tag always points at a
+commit carrying its own changelog. Pushing a tag by hand does nothing.
+
+It refuses to release a version whose `[Unreleased]` section is empty. Record the
+change when you make it, not at release time.
+
+The Marketplace is a separate decision: `publishPlugin` runs only when the repository
+variable `PUBLISH_TO_MARKETPLACE` is `true`, because a bad listing cannot be withdrawn
+as easily as a tag.
+
 ## Layout
 
 ```

@@ -1,11 +1,24 @@
 name: Release
 
+# Releasing is a dispatch, not a tag push. The workflow writes the changelog entry
+# for the version, builds, and only then commits and tags -- so the tag always points
+# at a commit containing its own changelog, and a build that fails leaves main
+# untouched. A tag pushed by hand does nothing.
 on:
-  push:
-    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to release, without the leading v (for example 0.1.3)'
+        required: true
+        type: string
 
 permissions:
   contents: write
+
+# Two releases must never interleave: both push main.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -14,17 +27,30 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
 
-      # The tag is the only place a released version is written down.
-      - name: Derive the version from the tag
-        id: version
+      # First, because it is the only step that validates the version, and it refuses
+      # to release a version whose [Unreleased] section says nothing.
+      - name: Cut the changelog
+        env:
+          VERSION: ${{ inputs.version }}
+        run: .github/scripts/cut-changelog.sh "$VERSION" "$(date -u +%Y-%m-%d)"
+
+      - name: Check the version is free
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          if ! printf '%s' "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.-]+)?$'; then
-            echo "Tag '$GITHUB_REF_NAME' is not a version; expected vMAJOR.MINOR.PATCH" >&2
+          if git rev-parse -q --verify "refs/tags/v$VERSION" >/dev/null; then
+            echo "Tag v$VERSION already exists. Delete it, or pick another version." >&2
             exit 1
           fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "Release v$VERSION already exists." >&2
+            exit 1
+          fi
 
       - name: Set up JDK 25
         uses: actions/setup-java@v4
@@ -37,32 +63,52 @@ jobs:
 
       - name: Test
         env:
-          PLUGIN_VERSION: ${{ steps.version.outputs.version }}
+          PLUGIN_VERSION: ${{ inputs.version }}
         run: ./gradlew test verifyPluginStructure --no-daemon
 
       - name: Build the plugin
         env:
-          PLUGIN_VERSION: ${{ steps.version.outputs.version }}
+          PLUGIN_VERSION: ${{ inputs.version }}
           CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
           PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
         run: ./gradlew buildPlugin --no-daemon
 
+      # Nothing has been pushed until here, so a red build costs a workflow run and
+      # nothing else. The push of main fails rather than rebasing if someone landed a
+      # commit meanwhile: the artifact above was built from this tree, not that one.
+      - name: Commit the changelog and tag it
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add CHANGELOG.md
+          if git diff --cached --quiet; then
+            echo "CHANGELOG.md was already current for $VERSION."
+          else
+            git commit -m "Cut $VERSION in the changelog"
+            git push origin main
+          fi
+          git tag -a "v$VERSION" -m "$VERSION"
+          git push origin "v$VERSION"
+
       - name: Publish the GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            --title "$GITHUB_REF_NAME" \
+          gh release create "v$VERSION" \
+            --title "v$VERSION" \
             --generate-notes \
             build/distributions/*.zip
 
       # A separate, deliberate step: a bad release on the Marketplace cannot be
-      # withdrawn as easily as a tag, so tagging alone never publishes there.
+      # withdrawn as easily as a tag, so releasing alone never publishes there.
       - name: Publish to the JetBrains Marketplace
         if: ${{ vars.PUBLISH_TO_MARKETPLACE == 'true' }}
         env:
-          PLUGIN_VERSION: ${{ steps.version.outputs.version }}
+          PLUGIN_VERSION: ${{ inputs.version }}
           PUBLISH_TOKEN: ${{ secrets.JETBRAINS_MARKETPLACE_TOKEN }}
           CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
