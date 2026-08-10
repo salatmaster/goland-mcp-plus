@@ -5,6 +5,8 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-10
+
 ### Fixed
 
 Six defects a live check found, every one of which the test suite was green on.
@@ -44,6 +46,14 @@ Six defects a live check found, every one of which the test suite was green on.
   reachable; a wrong one lists the modules that exist.
 - A test that fails if the plugin stops being dynamically loadable.
 
+### Changed
+
+- The agent plugin is `goland-mcp-plus`, not `go-mcp-plus` — installing it now reads
+  `/plugin install goland-mcp-plus@goland-mcp-plus`. Anyone on the old name should
+  reinstall.
+- The skills live once in `skills/`, shared by Claude Code and Codex rather than
+  filed under the Claude Code plugin.
+
 ### Not included, deliberately
 
 `go_extract_function` needs an editor and an inplace naming template a tool call
@@ -54,5 +64,6 @@ cannot answer. A tool filter UI would duplicate the one the IDE ships. See
 
 First release.
 
-[unreleased]: https://github.com/salatmaster/goland-mcp-plus/compare/v0.1.0...HEAD
+[unreleased]: https://github.com/salatmaster/goland-mcp-plus/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/salatmaster/goland-mcp-plus/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/salatmaster/goland-mcp-plus/releases/tag/v0.1.0
