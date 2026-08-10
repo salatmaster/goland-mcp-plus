@@ -7,6 +7,9 @@ import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.project.Project
+import dev.salatmaster.golandmcp.common.SymbolRefParseException
+import dev.salatmaster.golandmcp.common.parseSymbolRef
+import dev.salatmaster.golandmcp.go.GoCheckOutcome
 import dev.salatmaster.golandmcp.go.GoInterfaceFactsImpl
 import dev.salatmaster.golandmcp.go.GoSatisfaction
 import dev.salatmaster.golandmcp.metrics.tracked
@@ -17,6 +20,8 @@ import kotlinx.serialization.Serializable
 data class GoImplementationEntry(
     val typeName: String,
     val qualifiedName: String,
+    /** A reference every tool here accepts and that identifies exactly this symbol. */
+    val reference: String,
     val packagePath: String,
     val location: String,
     /** True when only the pointer form satisfies the interface. */
@@ -37,6 +42,8 @@ data class GoImplementationsResult(
 data class GoSatisfiedInterfaceEntry(
     val interfaceName: String,
     val qualifiedName: String,
+    /** A reference every tool here accepts and that identifies exactly this symbol. */
+    val reference: String,
     val packagePath: String,
     val location: String,
     /** True when only the pointer form satisfies this interface. */
@@ -74,14 +81,22 @@ data class GoInterfaceCheckResult(
 
 class InterfaceToolset : McpToolset {
 
+    /** Parses a reference the same way every other tool does, failing with its advice. */
+    private fun reference(raw: String) = try {
+        parseSymbolRef(raw)
+    } catch (e: SymbolRefParseException) {
+        mcpFail(e.message ?: "Could not parse '$raw'")
+    }
+
     private val facts = GoInterfaceFactsImpl()
 
     @McpTool
     @McpDescription(
         "List the Go types that implement an interface. Go interfaces are satisfied " +
             "structurally with no 'implements' keyword, so text search cannot answer this. " +
-            "Each result states whether the value type satisfies the interface or only its " +
-            "pointer form does.",
+            "Includes types that implement it without declaring a single method, by " +
+            "embedding a type or the interface itself. Each result states whether the value " +
+            "type satisfies the interface or only its pointer form does.",
     )
     suspend fun go_implementations(
         @McpDescription("Interface name, e.g. 'Shape' or 'Reader'")
@@ -102,37 +117,54 @@ class InterfaceToolset : McpToolset {
         if (limit <= 0) mcpFail("limit must be positive, got $limit")
 
         // Fetch one extra to detect truncation without running the search twice.
-        val found = readAction { facts.implementors(project, interfaceName, limit + 1) }
-        if (found.isEmpty()) {
-            mcpFail(
-                "No interface named '$interfaceName' was found, or nothing implements it. " +
-                    "Check the name, or qualify it with its package.",
+        val search = readAction { facts.implementors(project, reference(interfaceName), limit + 1) }
+            ?: mcpFail(
+                "No Go interface matches '$interfaceName'. Check the spelling, or qualify it " +
+                    "with its package, e.g. 'orders.billingService'.",
             )
-        }
+        val found = search.items
 
         // Deliberately no count of what was dropped. The search stops at limit + 1, so any
         // such number would always be 1 — for a widely implemented interface like io.Reader
         // that would report "1 more" when hundreds remain. Stating the fact and how to act on
         // it beats stating a confident falsehood.
-        val truncated = found.size > limit
+        //
+        // A scan that hit its own cap is truncation too. Reporting that case as a complete
+        // list is what made an incomplete answer indistinguishable from an exhaustive one.
+        val truncated = found.size > limit || !search.complete
         return GoImplementationsResult(
             interfaceName = interfaceName,
             implementations = found.take(limit).map {
                 GoImplementationEntry(
                     typeName = it.typeName,
                     qualifiedName = it.qualifiedName,
+                    reference = it.reference,
                     packagePath = it.packagePath,
                     location = it.location,
                     requiresPointer = it.requiresPointer,
                 )
             },
             truncated = truncated,
-            hint = if (truncated) {
-                "More implementations exist than were returned; the count is unknown. " +
-                    "Project types are listed first. Raise limit to see more."
-            } else {
-                ""
-            },
+            hint = buildList {
+                if (found.size > limit) {
+                    add(
+                        "More implementations exist than were returned; the count is unknown. " +
+                            "Project types are listed first. Raise limit to see more.",
+                    )
+                }
+                if (!search.complete) {
+                    add(
+                        "The search stopped at its candidate cap, so implementations may be " +
+                            "missing from this list. To settle one type, call " +
+                            "go_interface_check with its name.",
+                    )
+                }
+                if (search.note.isNotEmpty()) {
+                    add(search.note)
+                } else if (found.isEmpty() && search.complete) {
+                    add("'$interfaceName' resolves, and no type in this project implements it.")
+                }
+            }.joinToString(" "),
         )
     }
 
@@ -161,33 +193,52 @@ class InterfaceToolset : McpToolset {
     ): GoInterfacesOfResult {
         if (limit <= 0) mcpFail("limit must be positive, got $limit")
 
-        val found = readAction { facts.interfacesOf(project, typeName, limit + 1) }
-        if (found.isEmpty()) {
-            mcpFail(
-                "No type named '$typeName' was found, or it satisfies no interface. " +
-                    "Note that a type with no methods satisfies only the empty interface.",
+        // Resolution failure and "satisfies nothing" are different answers: the first means
+        // try another spelling, the second means stop. Reporting both as one error left the
+        // caller unable to tell which.
+        val search = readAction { facts.interfacesOf(project, reference(typeName), limit + 1) }
+            ?: mcpFail(
+                "No Go type matches '$typeName'. Check the spelling, or qualify it with its " +
+                    "package, e.g. 'billing.Client'.",
             )
-        }
+        val found = search.items
 
-        val truncated = found.size > limit
+        val truncated = found.size > limit || !search.complete
         return GoInterfacesOfResult(
             typeName = typeName,
             interfaces = found.take(limit).map {
                 GoSatisfiedInterfaceEntry(
                     interfaceName = it.interfaceName,
                     qualifiedName = it.qualifiedName,
+                    reference = it.reference,
                     packagePath = it.packagePath,
                     location = it.location,
                     requiresPointer = it.requiresPointer,
                 )
             },
             truncated = truncated,
-            hint = if (truncated) {
-                "More interfaces exist than were returned; the count is unknown. " +
-                    "Project interfaces are listed first. Raise limit to see more."
-            } else {
-                ""
-            },
+            hint = buildList {
+                if (found.size > limit) {
+                    add(
+                        "More interfaces exist than were returned; the count is unknown. " +
+                            "Project interfaces are listed first. Raise limit to see more.",
+                    )
+                }
+                if (!search.complete) {
+                    add(
+                        "The search stopped at its candidate cap, so interfaces may be " +
+                            "missing from this list. To settle one, call go_interface_check.",
+                    )
+                }
+                if (search.note.isNotEmpty()) {
+                    add(search.note)
+                } else if (found.isEmpty() && search.complete) {
+                    add(
+                        "'$typeName' resolves, and satisfies no interface in this project. " +
+                            "A type with no methods satisfies only the empty interface.",
+                    )
+                }
+            }.joinToString(" "),
         )
     }
 
@@ -214,11 +265,15 @@ class InterfaceToolset : McpToolset {
         typeName: String,
         interfaceName: String,
     ): GoInterfaceCheckResult {
-        val result = readAction { facts.check(project, typeName, interfaceName) }
-            ?: mcpFail(
-                "Could not resolve type '$typeName' or interface '$interfaceName'. " +
-                    "Both must exist in the project or its dependencies.",
-            )
+        val result = when (
+            val outcome = readAction { facts.check(project, reference(typeName), reference(interfaceName)) }
+        ) {
+            is GoCheckOutcome.Checked -> outcome.satisfaction
+            GoCheckOutcome.TypeNotFound -> mcpFail("No Go type matches '$typeName'.")
+            GoCheckOutcome.InterfaceNotFound -> mcpFail("No Go type matches '$interfaceName'.")
+            GoCheckOutcome.NotAnInterface ->
+                mcpFail("'$interfaceName' resolves, but it is not an interface.")
+        }
 
         return GoInterfaceCheckResult(
             satisfied = result.satisfied,
@@ -249,11 +304,28 @@ private fun hintFor(typeName: String, interfaceName: String, result: GoSatisfact
                 "Add ${if (result.missing.size == 1) "this method" else "these methods"} " +
                 "to satisfy $interfaceName."
 
-        result.pointerOnly.isNotEmpty() ->
-            "$typeName declares ${result.pointerOnly.joinToString(", ")} on a pointer " +
-                "receiver, so *$typeName satisfies $interfaceName but $typeName does not. " +
-                "Either use *$typeName at the call site, or change those methods to value " +
-                "receivers."
+        result.pointerOnly.isNotEmpty() -> {
+            // "Declares" would be a lie for a promoted method, and so would the advice: the
+            // method is usually in another package, and what the caller controls is how the
+            // field is embedded.
+            val promoted = result.pointerOnlyPromoted
+            val declared = result.pointerOnly.filterNot { it in promoted }
+            val fixes = buildList {
+                add("use *$typeName at the call site")
+                if (declared.isNotEmpty()) {
+                    add("give ${declared.joinToString(", ")} a value receiver")
+                }
+                if (promoted.isNotEmpty()) {
+                    add(
+                        "embed a pointer to the type providing " +
+                            promoted.joinToString(", "),
+                    )
+                }
+            }
+            "$typeName provides ${result.pointerOnly.joinToString(", ")} only through a " +
+                "pointer receiver, so *$typeName satisfies $interfaceName but $typeName " +
+                "does not. To fix it, ${fixes.joinToString(", or ")}."
+        }
 
         else ->
             "Signatures differ from what $interfaceName requires. " +

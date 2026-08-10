@@ -9,11 +9,14 @@ import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectRootManager
+import dev.salatmaster.golandmcp.common.SymbolRefParseException
 import dev.salatmaster.golandmcp.common.cleanPath
 import dev.salatmaster.golandmcp.common.createFile
+import dev.salatmaster.golandmcp.common.parseSymbolRef
 import dev.salatmaster.golandmcp.common.resolveFile
 import dev.salatmaster.golandmcp.common.unifiedDiff
 import dev.salatmaster.golandmcp.common.writeToDocument
+import dev.salatmaster.golandmcp.go.GoCheckOutcome
 import dev.salatmaster.golandmcp.go.GoGeneration
 import dev.salatmaster.golandmcp.go.GoMethodRequirement
 import dev.salatmaster.golandmcp.go.GoImportsImpl
@@ -65,6 +68,13 @@ class GenerationToolset : McpToolset {
             )
         }
 
+    /** Parses a reference the same way every other tool does, failing with its advice. */
+    private fun reference(raw: String) = try {
+        parseSymbolRef(raw)
+    } catch (e: SymbolRefParseException) {
+        mcpFail(e.message ?: "Could not parse '$raw'")
+    }
+
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun implementInterface(
         project: Project,
@@ -73,11 +83,14 @@ class GenerationToolset : McpToolset {
         pointerReceiver: Boolean,
         apply: Boolean,
     ): GoGeneratedCode {
-        val satisfaction = readAction { facts.check(project, typeName, interfaceName) }
-            ?: mcpFail(
-                "Could not resolve type '$typeName' or interface '$interfaceName'. " +
-                    "Both must exist in the project or its dependencies.",
-            )
+        val typeRef = reference(typeName)
+        val interfaceRef = reference(interfaceName)
+        val satisfaction = when (val outcome = readAction { facts.check(project, typeRef, interfaceRef) }) {
+            is GoCheckOutcome.Checked -> outcome.satisfaction
+            GoCheckOutcome.TypeNotFound -> mcpFail("No Go type matches '$typeName'.")
+            GoCheckOutcome.InterfaceNotFound -> mcpFail("No Go type matches '$interfaceName'.")
+            GoCheckOutcome.NotAnInterface -> mcpFail("'$interfaceName' is not an interface.")
+        }
 
         if (satisfaction.missingSignatures.isEmpty()) {
             return GoGeneratedCode(
@@ -102,9 +115,7 @@ class GenerationToolset : McpToolset {
             return GoGeneratedCode(code, "", false, "", "Set apply to append this to the source file.")
         }
 
-        val location = readAction {
-            symbols.lookup(project, dev.salatmaster.golandmcp.common.parseSymbolRef(typeName))
-        }
+        val location = readAction { symbols.lookup(project, typeRef) }
         val path = (location as? dev.salatmaster.golandmcp.go.GoLookupResult.Found)
             ?.symbol?.location?.substringBeforeLast(':')
             ?: mcpFail("Generated the stubs but could not locate the file declaring '$typeName'.")
@@ -146,11 +157,12 @@ class GenerationToolset : McpToolset {
     ): GoGeneratedCode {
         if (interfaceName.isBlank()) mcpFail("interfaceName must not be blank")
 
-        val declared = readAction { facts.methodsOf(project, typeName) }
+        val declared = readAction { facts.methodsOf(project, reference(typeName)) }
+            ?: mcpFail("No Go type matches '$typeName'.")
         if (declared.isEmpty()) {
             mcpFail(
-                "No type named '$typeName' was found, or it declares no methods. " +
-                    "An interface can only be extracted from a type that has some.",
+                "'$typeName' declares no methods, and an interface can only be extracted " +
+                    "from a type that has some.",
             )
         }
 

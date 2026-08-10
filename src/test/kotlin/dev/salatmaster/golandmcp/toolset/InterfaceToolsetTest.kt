@@ -15,11 +15,30 @@ class InterfaceToolsetTest : GoMcpToolTestCase() {
         loadFixture("basic")
         val result = callTool { toolset.implementations(project, "Shape", limit = 50) }
 
-        assertEquals(listOf("Circle", "Rect"), result.implementations.map { it.typeName }.sorted())
+        assertEquals(
+            listOf("Boxed", "BoxedCircle", "Circle", "PointerBoxed", "Rect"),
+            result.implementations.map { it.typeName }.sorted(),
+        )
         assertTrue(result.implementations.single { it.typeName == "Circle" }.requiresPointer)
         assertFalse(result.implementations.single { it.typeName == "Rect" }.requiresPointer)
         assertFalse(result.truncated)
         assertTrue("a complete list needs no hint", result.hint.isEmpty())
+    }
+
+    /**
+     * Every type satisfies the empty interface, so an empty list here means the opposite of
+     * what it means everywhere else, and the tool has to say which.
+     */
+    fun `test the empty interface is not reported as unimplemented`() {
+        loadFixture("basic")
+        val result = callTool { toolset.implementations(project, "Anything", limit = 50) }
+
+        assertTrue(result.implementations.isEmpty())
+        assertFalse(result.truncated)
+        assertTrue(
+            "the hint must not claim nothing implements it, was: ${result.hint}",
+            result.hint.contains("every type"),
+        )
     }
 
     fun `test truncation is flagged with actionable advice`() {
@@ -64,6 +83,28 @@ class InterfaceToolsetTest : GoMcpToolTestCase() {
         assertTrue(
             "hint should tell the agent to use a pointer, was: ${result.hint}",
             result.hint.contains("*Circle"),
+        )
+    }
+
+    /**
+     * A method reached through an embedded field is not declared here, and it usually lives
+     * in another package. Telling the caller to give it a value receiver sends them to edit
+     * code they do not own, to fix a type that is not the one they asked about.
+     */
+    fun `test check explains a pointer trap that comes from embedding`() {
+        loadFixture("basic")
+        val result = callTool { toolset.interfaceCheck(project, "BoxedCircle", "Shape") }
+
+        assertFalse(result.satisfied)
+        assertEquals("*BoxedCircle", result.checkedAs)
+        assertEquals(listOf("Area", "Name"), result.pointerReceiverOnly.sorted())
+        assertTrue(
+            "the hint must not say BoxedCircle declares them, was: ${result.hint}",
+            !result.hint.contains("declares"),
+        )
+        assertTrue(
+            "the hint should point at the embedded field, was: ${result.hint}",
+            result.hint.contains("embed a pointer"),
         )
     }
 

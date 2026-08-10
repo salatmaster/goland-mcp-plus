@@ -2,6 +2,7 @@ package dev.salatmaster.golandmcp.go
 
 import com.intellij.openapi.application.runReadAction
 import dev.salatmaster.golandmcp.GoMcpToolTestCase
+import dev.salatmaster.golandmcp.common.parseSymbolRef
 
 class GoInterfacesOfTest : GoMcpToolTestCase() {
 
@@ -9,7 +10,7 @@ class GoInterfacesOfTest : GoMcpToolTestCase() {
 
     fun `test lists every interface a value type satisfies`() {
         loadFixture("basic")
-        val found = runReadAction { facts.interfacesOf(project, "Rect", limit = 50) }
+        val found = runReadAction { facts.interfacesOf(project, parseSymbolRef("Rect"), limit = 50) }!!.items
 
         val names = found.map { it.interfaceName }.sorted()
         assertTrue("Rect satisfies Shape, was $names", names.contains("Shape"))
@@ -19,7 +20,7 @@ class GoInterfacesOfTest : GoMcpToolTestCase() {
 
     fun `test reports pointer requirement per interface`() {
         loadFixture("basic")
-        val found = runReadAction { facts.interfacesOf(project, "Circle", limit = 50) }
+        val found = runReadAction { facts.interfacesOf(project, parseSymbolRef("Circle"), limit = 50) }!!.items
 
         val shape = found.single { it.interfaceName == "Shape" }
         assertTrue("Circle satisfies Shape only via *Circle", shape.requiresPointer)
@@ -27,7 +28,7 @@ class GoInterfacesOfTest : GoMcpToolTestCase() {
 
     fun `test resolves interfaces satisfied through embedding`() {
         loadFixture("basic")
-        val found = runReadAction { facts.interfacesOf(project, "Pipe", limit = 50) }
+        val found = runReadAction { facts.interfacesOf(project, parseSymbolRef("Pipe"), limit = 50) }!!.items
 
         val names = found.map { it.interfaceName }.sorted()
         assertTrue("Pipe satisfies the embedding ReadWriter, was $names", names.contains("ReadWriter"))
@@ -37,7 +38,7 @@ class GoInterfacesOfTest : GoMcpToolTestCase() {
 
     fun `test partial implementation excludes the embedding interface`() {
         loadFixture("basic")
-        val found = runReadAction { facts.interfacesOf(project, "HalfPipe", limit = 50) }
+        val found = runReadAction { facts.interfacesOf(project, parseSymbolRef("HalfPipe"), limit = 50) }!!.items
 
         val names = found.map { it.interfaceName }.sorted()
         assertTrue("HalfPipe satisfies Reader, was $names", names.contains("Reader"))
@@ -46,6 +47,9 @@ class GoInterfacesOfTest : GoMcpToolTestCase() {
 
     fun `test returns empty for an unknown type`() {
         loadFixture("basic")
-        assertTrue(runReadAction { facts.interfacesOf(project, "Nonexistent", limit = 50) }.isEmpty())
+        assertNull(
+            "an unresolved type is not the same as a type satisfying nothing",
+            runReadAction { facts.interfacesOf(project, parseSymbolRef("Nonexistent"), limit = 50) },
+        )
     }
 }
