@@ -73,4 +73,13 @@ class GoTypeFromJsonTest {
             GoTypeFromJson.convert("42", "X")
         }
     }
+
+    /** golint keeps the plural `s` lowercase: PhotoURLs, not PhotoUrls. */
+    @Test
+    fun `a plural initialism keeps its lowercase s`() {
+        val code = GoTypeFromJson.convert("""{"photo_urls": ["a"], "api_ids": [1]}""", "Row")
+
+        assertTrue("expected PhotoURLs, was:\n$code", code.contains("PhotoURLs []string"))
+        assertTrue("expected APIIDs, was:\n$code", code.contains("APIIDs "))
+    }
 }
