@@ -9,7 +9,6 @@ import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectRootManager
-import com.intellij.psi.PsiDocumentManager
 import dev.salatmaster.golandmcp.common.cleanPath
 import dev.salatmaster.golandmcp.common.createFile
 import dev.salatmaster.golandmcp.common.resolveFile
@@ -310,11 +309,6 @@ class GenerationToolset : McpToolset {
                 imports.addImport(resolved.psiFile, it, "")
             }
             optimizeTask?.run()
-            // The optimizer edits PSI and the platform may hold the document back until the
-            // command ends. Reading the document before this reported an unchanged file
-            // while the import block had in fact been rewritten.
-            PsiDocumentManager.getInstance(project)
-                .doPostponedOperationsAndUnblockDocument(resolved.document)
         }
 
         val after = resolved.document.text
