@@ -5,6 +5,38 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+The interface tools answered confidently and wrongly on code that leans on two
+ordinary Go features: a type declared in another package, and embedding.
+
+- **A cross-package interface was reported as unimplemented.** An interface
+  declared at the use site has to write `billing.Spec` where the implementing
+  package writes `Spec`, and signatures were compared as text, so
+  `go_interface_check` said "does not implement" about code that compiles and
+  `go_implementations` dropped the real client while keeping the mock. Signatures
+  are now compared by type, falling back to text with package qualifiers stripped.
+- **`go_implementations` never listed a type that implements by embedding.** The
+  search asked which types *declare* a method of the interface's name, so a
+  wrapper that embeds a client, or a mock that embeds the interface, appeared
+  nowhere — and the result still said the list was complete. It now probes every
+  interface method and follows embedding, and says so when a scan stops early
+  instead of reporting a partial list as exhaustive.
+- **`go_interfaces_of` answered "satisfies nothing"** for the same types, for the
+  same reason: it looked only at the methods a type declares.
+- **The pointer-receiver answer ignored how a field is embedded.** `struct { Client }`
+  and `struct { *Client }` have different method sets when `Client`'s methods take
+  a pointer receiver; both were reported as satisfying by value. The advice that
+  goes with it no longer says a type "declares" a method it gets by promotion, and
+  points at the embedded field instead of at a method in another package.
+- **Two types of the same name in different packages collided,** and the second
+  was silently dropped from every list.
+- **`go_find_usages` now says that calls dispatched through an interface are not
+  counted,** and names the interfaces the receiver satisfies.
+- **Package-level `var` and `const` did not resolve** in any symbol tool: they are
+  in neither the type nor the function index.
+- **Plural initialisms:** `photo_urls` now generates `PhotoURLs`.
+
 ## [0.1.1] - 2026-08-10
 
 ### Fixed
