@@ -1,0 +1,23 @@
+<!--
+Paste this into your project's CLAUDE.md when you want the rule in context whether
+or not a skill loads. Project rules are always in context; skills are not.
+-->
+
+## Go tooling
+
+This project is open in GoLand with the Go MCP++ plugin, which exposes `go_*` MCP
+tools that resolve through the Go type system. Prefer them over shell tools:
+
+- **Finding code**: `go_symbol`, `go_doc`, `go_source_of`, `go_package_api`,
+  `go_find_usages`. Do not grep for a Go declaration — text search cannot
+  distinguish same-named symbols across packages, and misses methods promoted
+  through embedding.
+- **Interfaces**: `go_implementations`, `go_interfaces_of`, `go_interface_check`.
+  Go records no `implements` relationship anywhere in the source, so these
+  questions have no textual answer at all. On a "does not implement" error, read
+  `checkedAs` and `pointerReceiverOnly` — methods on `*T` are not in `T`'s method
+  set.
+- **Refactoring**: `go_change_signature`, `go_safe_delete`, `go_inline`,
+  `go_move_files`. These rewrite every call site and land on the IDE's undo stack.
+  Read the current signature with `go_symbol` before changing it.
+- **Verifying**: `go_build_check` after any multi-file change, then `go_test`.
