@@ -47,12 +47,16 @@ see [CONTRIBUTING](CONTRIBUTING.md).)*
 
 **2. Point your agent at the IDE.** The MCP server *is* the IDE, on a port it
 computes per instance — so never write the port by hand. Open **Settings | Tools |
-MCP Server** and enable it, then:
+MCP Server**, enable it, then:
 
 | Client | How |
 | --- | --- |
-| Claude Code, Codex, Cursor and friends | pick it in the client list; the IDE writes the config and keeps the port in sync |
-| anything else | **Copy SSE Config** or **Copy Stdio Config**, paste into your client |
+| Claude Code, Codex, Cursor and friends | **Auto-Configure** — the IDE writes the config and keeps the port in sync |
+| anything else | **Copy config: HTTP Stream**, paste into your client |
+
+Prefer HTTP Stream. SSE is offered too, but it is the transport MCP has since
+deprecated in favour of streamable HTTP; take Stdio only for a client that speaks
+nothing else.
 
 GoLand also raises a banner when it notices Claude or Codex start in a terminal
 without a matching setup.

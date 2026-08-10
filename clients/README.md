@@ -31,5 +31,9 @@ argument shapes and the traps.
 
 Both assume the IDE is already connected. The MCP server is the IDE itself, on a
 port assigned per instance, so take the configuration from **Settings | Tools | MCP
-Server** rather than writing a port by hand. Check it by asking the agent to call
-`go_symbol` on any type in your project; if the tools are missing, no skill helps.
+Server** — **Auto-Configure** for a client it recognises, otherwise **Copy config:
+HTTP Stream** — rather than writing a port by hand. SSE is still offered there, but
+MCP has deprecated it in favour of streamable HTTP.
+
+Check it by asking the agent to call `go_symbol` on any type in your project; if the
+tools are missing, no skill helps.
