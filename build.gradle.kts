@@ -82,4 +82,17 @@ tasks.test {
     inputs.dir(layout.projectDirectory.dir("src/test/testData"))
         .withPropertyName("testData")
         .withPathSensitivity(PathSensitivity.RELATIVE)
+
+    // The agent plugin is read from the repository for the same reason, and with the same
+    // consequence: without this, breaking a manifest leaves the suite reporting the
+    // previous run as still valid.
+    inputs.dir(layout.projectDirectory.dir("plugins"))
+        .withPropertyName("agentPlugin")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.files(
+        layout.projectDirectory.file(".claude-plugin/marketplace.json"),
+        layout.projectDirectory.file(".agents/plugins/marketplace.json"),
+    )
+        .withPropertyName("marketplaces")
+        .withPathSensitivity(PathSensitivity.RELATIVE)
 }

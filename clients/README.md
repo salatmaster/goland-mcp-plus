@@ -4,8 +4,12 @@ The plugin exposes the tools; these make an agent reach for them. That is a
 separate problem: a model that does not know a tool exists falls back to `grep`,
 and in Go that quietly gives wrong answers.
 
-The skills live once, in [`../skills`](../skills), and both clients read the same
-files.
+The skills live once, in
+[`../plugins/goland-mcp-plus/skills`](../plugins/goland-mcp-plus/skills). One plugin
+directory carries a manifest for each client — `.claude-plugin/plugin.json` and
+`.codex-plugin/plugin.json` — over the same files. It has to be one real directory
+rather than a link: Codex copies the plugin into its own cache, and a symlink
+pointing out of it installs as a plugin with no skills in it, reporting success.
 
 | Skill | Fires on |
 | --- | --- |

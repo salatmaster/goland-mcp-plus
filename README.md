@@ -64,7 +64,8 @@ without a matching setup.
 Check it worked by asking the agent to call `go_symbol` on any type in your project.
 
 **3. Teach the agent the tools exist.** A connected agent still reaches for `grep`.
-[`clients/`](clients) ships five skills, shared by both clients:
+[`plugins/goland-mcp-plus`](plugins/goland-mcp-plus) is one plugin with five skills,
+installed by either client:
 
 ```
 # Claude Code
@@ -72,7 +73,8 @@ Check it worked by asking the agent to call `go_symbol` on any type in your proj
 /plugin install goland-mcp-plus@goland-mcp-plus
 
 # Codex
-cp -R skills/* ~/.codex/skills/
+codex plugin marketplace add salatmaster/goland-mcp-plus
+codex plugin add goland-mcp-plus@goland-mcp-plus
 ```
 
 For any other agent, the same guidance in one page: paste
