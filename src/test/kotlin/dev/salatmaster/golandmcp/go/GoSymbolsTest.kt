@@ -60,4 +60,24 @@ class GoSymbolsTest : GoMcpToolTestCase() {
             found.symbol.doc?.contains("something with an area") == true,
         )
     }
+
+    /**
+     * `pkg.Symbol` is what an agent writes after reading an import. Two dotted segments are
+     * ambiguous with `Type.Member`, so this resolves only on the retry.
+     */
+    fun `test resolves a package qualified reference with no slash`() {
+        loadFixture("basic")
+        val result = runReadAction { symbols.lookup(project, parseSymbolRef("basic.Rect")) }
+
+        assertTrue("basic.Rect should resolve, got $result", result is GoLookupResult.Found)
+        assertEquals("basic.Rect", (result as GoLookupResult.Found).symbol.qualifiedName)
+    }
+
+    fun `test a type and member reference still wins over the package reading`() {
+        loadFixture("basic")
+        val result = runReadAction { symbols.lookup(project, parseSymbolRef("Rect.Area")) }
+
+        assertTrue(result is GoLookupResult.Found)
+        assertEquals("Area", (result as GoLookupResult.Found).symbol.name)
+    }
 }

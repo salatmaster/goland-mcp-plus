@@ -104,7 +104,14 @@ class GoPackagesImpl(
         return GoTypeInfo(
             name = spec.name.orEmpty(),
             kind = kind,
-            underlying = underlyingType?.text?.lineSequence()?.first()?.trim().orEmpty(),
+            // Naming the shape, not quoting its first line: for a struct that line is the
+            // dangling "struct {", and the fields are listed separately anyway.
+            underlying = when (underlyingType) {
+                null -> ""
+                is GoStructType -> "struct"
+                is GoInterfaceType -> "interface"
+                else -> underlyingType.text.lineSequence().first().trim()
+            },
             doc = docs.docComment(spec).orEmpty(),
             location = formatLocation(project, spec),
             fields = fields,

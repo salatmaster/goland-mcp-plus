@@ -6,6 +6,8 @@ import com.intellij.mcpserver.annotations.McpTool
 import com.intellij.mcpserver.mcpFail
 import com.intellij.mcpserver.project
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.roots.ProjectRootManager
+import dev.salatmaster.golandmcp.common.cleanPath
 import dev.salatmaster.golandmcp.metrics.tracked
 import dev.salatmaster.golandmcp.toolchain.GoCommandResult
 import dev.salatmaster.golandmcp.toolchain.GoDiagnosticsParser
@@ -80,11 +82,19 @@ class ToolchainToolset : McpToolset {
         packagePattern: String,
         @McpDescription("Regular expression selecting test names, or empty for all")
         runPattern: String,
+        @McpDescription(MODULE_DIRECTORY)
+        moduleDirectory: String,
         @McpDescription("Timeout in milliseconds")
         timeoutMs: Int,
     ): GoTestResult =
         tracked("go_test") {
-            test(currentCoroutineContext().project, packagePattern, runPattern, timeoutMs)
+            test(
+                currentCoroutineContext().project,
+                packagePattern,
+                runPattern,
+                moduleDirectory,
+                timeoutMs,
+            )
         }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
@@ -92,6 +102,7 @@ class ToolchainToolset : McpToolset {
         project: Project,
         packagePattern: String,
         runPattern: String,
+        moduleDirectory: String,
         timeoutMs: Int,
     ): GoTestResult {
         val arguments = buildList {
@@ -104,8 +115,23 @@ class ToolchainToolset : McpToolset {
             add(packagePattern.ifBlank { "./..." })
         }
 
-        val result = execute(project, arguments, timeoutMs)
+        val result = execute(project, arguments, timeoutMs, moduleDirectory)
         val run = GoTestOutputParser.parse(result.stdout + "\n" + result.stderr)
+
+        // Backstop. `go test` can fail before it produces anything the parser recognises -- a
+        // missing module, an unusable SDK. Left alone that reads as "no tests matched", which
+        // is a passing-looking answer to a run that never happened.
+        val toolchainFailed =
+            result.exitCode != 0 && run.failedCount == 0 && run.buildErrors.isEmpty()
+        val reportedErrors = if (toolchainFailed) {
+            (result.stderr + "\n" + result.stdout)
+                .lines()
+                .map { it.trim() }
+                .filter { it.isNotEmpty() && !it.startsWith("{") }
+                .ifEmpty { listOf("go test exited with code ${result.exitCode} and said nothing.") }
+        } else {
+            run.buildErrors
+        }
 
         val failures = run.cases
             .filter { !it.passed && !it.skipped }
@@ -124,12 +150,21 @@ class ToolchainToolset : McpToolset {
             failed = run.failedCount,
             skipped = run.skippedCount,
             failures = failures,
-            buildErrors = run.buildErrors.take(MAX_BUILD_ERRORS),
+            buildErrors = reportedErrors.take(MAX_BUILD_ERRORS),
             timedOut = result.timedOut,
             hint = when {
                 result.timedOut -> "The run hit the timeout; raise timeoutMs or narrow packagePattern."
+                toolchainFailed ->
+                    "go test failed before running anything (exit code ${result.exitCode}); " +
+                        "no test result here is meaningful. See buildErrors. " +
+                        if (reportedErrors.any { it.contains("main module") || it.contains("go.mod") }) {
+                            goModuleHint(project) + " Pass one as moduleDirectory."
+                        } else {
+                            ""
+                        }
                 run.buildErrors.isNotEmpty() -> "The package failed to build, so tests did not run."
-                run.failedCount == 0 && run.passedCount == 0 -> "No tests matched. Check packagePattern and runPattern."
+                run.failedCount == 0 && run.passedCount == 0 ->
+                    "No tests matched. Check packagePattern and runPattern."
                 else -> ""
             },
         )
@@ -143,17 +178,20 @@ class ToolchainToolset : McpToolset {
     suspend fun go_build_check(
         @McpDescription("Package pattern, e.g. './...'")
         packagePattern: String,
+        @McpDescription(MODULE_DIRECTORY)
+        moduleDirectory: String,
         @McpDescription("Timeout in milliseconds")
         timeoutMs: Int,
     ): GoCheckResult =
         tracked("go_build_check") {
-            buildCheck(currentCoroutineContext().project, packagePattern, timeoutMs)
+            buildCheck(currentCoroutineContext().project, packagePattern, moduleDirectory, timeoutMs)
         }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun buildCheck(
         project: Project,
         packagePattern: String,
+        moduleDirectory: String,
         timeoutMs: Int,
     ): GoCheckResult {
         // `go build -o /dev/null` type-checks without leaving binaries behind.
@@ -161,8 +199,9 @@ class ToolchainToolset : McpToolset {
             project,
             listOf("build", "-o", nullDevice(), packagePattern.ifBlank { "./..." }),
             timeoutMs,
+            moduleDirectory,
         )
-        return result.toCheckResult()
+        return result.toCheckResult(project)
     }
 
     @McpTool
@@ -174,19 +213,24 @@ class ToolchainToolset : McpToolset {
     suspend fun go_vet(
         @McpDescription("Package pattern, e.g. './...'")
         packagePattern: String,
+        @McpDescription(MODULE_DIRECTORY)
+        moduleDirectory: String,
         @McpDescription("Timeout in milliseconds")
         timeoutMs: Int,
     ): GoCheckResult =
-        tracked("go_vet") { vet(currentCoroutineContext().project, packagePattern, timeoutMs) }
+        tracked("go_vet") {
+            vet(currentCoroutineContext().project, packagePattern, moduleDirectory, timeoutMs)
+        }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
     internal suspend fun vet(
         project: Project,
         packagePattern: String,
+        moduleDirectory: String,
         timeoutMs: Int,
     ): GoCheckResult =
-        execute(project, listOf("vet", packagePattern.ifBlank { "./..." }), timeoutMs)
-            .toCheckResult()
+        execute(project, listOf("vet", packagePattern.ifBlank { "./..." }), timeoutMs, moduleDirectory)
+            .toCheckResult(project)
 
     @McpTool
     @McpDescription(
@@ -199,11 +243,13 @@ class ToolchainToolset : McpToolset {
         subcommand: String,
         @McpDescription("Extra arguments, e.g. a module path for 'why'; may be empty")
         arguments: List<String>,
+        @McpDescription(MODULE_DIRECTORY)
+        moduleDirectory: String,
         @McpDescription("Timeout in milliseconds")
         timeoutMs: Int,
     ): GoModResult =
         tracked("go_mod") {
-            mod(currentCoroutineContext().project, subcommand, arguments, timeoutMs)
+            mod(currentCoroutineContext().project, subcommand, arguments, moduleDirectory, timeoutMs)
         }
 
     /** Testable core; the project is explicit so tests need no MCP call context. */
@@ -211,6 +257,7 @@ class ToolchainToolset : McpToolset {
         project: Project,
         subcommand: String,
         arguments: List<String>,
+        moduleDirectory: String,
         timeoutMs: Int,
     ): GoModResult {
         // An allowlist: `go mod edit` rewrites go.mod in ways the caller cannot review here,
@@ -222,7 +269,7 @@ class ToolchainToolset : McpToolset {
             )
         }
 
-        val result = execute(project, listOf("mod", subcommand) + arguments, timeoutMs)
+        val result = execute(project, listOf("mod", subcommand) + arguments, timeoutMs, moduleDirectory)
         return GoModResult(
             command = result.command,
             ok = result.exitCode == 0 && !result.timedOut,
@@ -235,23 +282,72 @@ class ToolchainToolset : McpToolset {
         project: Project,
         arguments: List<String>,
         timeoutMs: Int,
+        moduleDirectory: String,
     ): GoCommandResult {
         if (timeoutMs <= 0) mcpFail("timeoutMs must be positive, got $timeoutMs")
+
+        val workingDirectory = resolveModuleDirectory(project, moduleDirectory)
         // Process execution blocks, so it belongs off the coroutine's default dispatcher.
         return withContext(Dispatchers.IO) {
-            runner.run(project, arguments, project.basePath, timeoutMs.toLong())
+            runner.run(project, arguments, workingDirectory, timeoutMs.toLong())
         }
     }
 
-    private fun GoCommandResult.toCheckResult(): GoCheckResult {
+    /**
+     * Where to run the command.
+     *
+     * The Go module is not always the project root: a service inside a polyglot repository is
+     * the normal case, and running there from the root fails with "does not contain main
+     * module" no matter what package pattern is passed.
+     */
+    private fun resolveModuleDirectory(project: Project, moduleDirectory: String): String? {
+        val relative = cleanPath(moduleDirectory).trim('/')
+        if (relative.isEmpty()) return project.basePath
+
+        val directory = ProjectRootManager.getInstance(project).contentRoots
+            .asSequence()
+            .mapNotNull { it.findFileByRelativePath(relative) }
+            .firstOrNull { it.isDirectory }
+            ?: mcpFail(
+                "moduleDirectory '$moduleDirectory' is not a directory in this project. " +
+                    goModuleHint(project),
+            )
+        return directory.path
+    }
+
+    /** Lists the modules in the project, so a wrong directory says what the right ones are. */
+    private fun goModuleHint(project: Project): String {
+        val modules = ProjectRootManager.getInstance(project).contentRoots
+            .asSequence()
+            .flatMap { root ->
+                com.intellij.openapi.vfs.VfsUtil.collectChildrenRecursively(root).asSequence()
+                    .filter { it.name == "go.mod" }
+                    .mapNotNull { com.intellij.openapi.vfs.VfsUtil.getRelativePath(it.parent, root) }
+            }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .take(MAX_MODULE_HINTS)
+            .toList()
+
+        return when {
+            modules.isEmpty() -> "No go.mod was found anywhere in this project."
+            else -> "Modules in this project: ${modules.joinToString(", ")}."
+        }
+    }
+
+    private fun GoCommandResult.toCheckResult(project: Project): GoCheckResult {
         val parsed = GoDiagnosticsParser.parse(stderr + "\n" + stdout)
+        val notes = parsed.notes.take(MAX_NOTES).toMutableList()
+        if (notes.any { it.contains("main module") || it.contains("go.mod file not found") }) {
+            notes += goModuleHint(project) + " Pass one as moduleDirectory."
+        }
         return GoCheckResult(
             command = command,
             ok = exitCode == 0 && !timedOut,
             diagnostics = parsed.diagnostics.take(MAX_DIAGNOSTICS).map {
                 GoDiagnosticEntry(it.file, it.line, it.column, it.message)
             },
-            notes = parsed.notes.take(MAX_NOTES),
+            notes = notes,
             timedOut = timedOut,
         )
     }
@@ -260,6 +356,10 @@ class ToolchainToolset : McpToolset {
         if (System.getProperty("os.name").startsWith("Windows", ignoreCase = true)) "NUL" else "/dev/null"
 
     private companion object {
+        const val MODULE_DIRECTORY =
+            "Directory of the Go module to run in, relative to the project root. Leave empty " +
+                "for the project root; pass e.g. 'backend' when go.mod lives in a subdirectory."
+        const val MAX_MODULE_HINTS = 10
         const val MAX_FAILURE_OUTPUT = 4_000
         const val MAX_BUILD_ERRORS = 50
         const val MAX_DIAGNOSTICS = 100

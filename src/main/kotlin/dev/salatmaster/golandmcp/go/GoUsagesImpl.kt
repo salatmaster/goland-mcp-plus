@@ -4,6 +4,7 @@ import com.goide.psi.GoCallExpr
 import com.goide.psi.GoAssignmentStatement
 import com.goide.psi.GoReferenceExpression
 import com.intellij.openapi.project.Project
+import com.intellij.psi.PsiComment
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
 import com.intellij.psi.search.GlobalSearchScope
@@ -39,6 +40,11 @@ class GoUsagesImpl(
         ReferencesSearch.search(element, GlobalSearchScope.allScope(project)).forEach(
             Processor { reference ->
                 val usageElement = reference.element
+                // A doc comment mentioning the symbol is not a usage of it. Go's own
+                // convention is that the comment opens with the declared name, so counting
+                // these would report every documented declaration as referenced -- and make
+                // go_safe_delete refuse to delete anything written the idiomatic way.
+                if (isInsideComment(usageElement)) return@Processor true
                 val file = usageElement.containingFile ?: return@Processor true
                 val isTest = file.name.endsWith("_test.go")
                 if (!includeTests && isTest) return@Processor true
@@ -66,6 +72,9 @@ class GoUsagesImpl(
             truncated = overflow,
         )
     }
+
+    private fun isInsideComment(element: PsiElement): Boolean =
+        PsiTreeUtil.getParentOfType(element, PsiComment::class.java, false) != null
 
     /**
      * Classifies a reference by the shape of its surroundings.

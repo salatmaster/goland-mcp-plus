@@ -5,6 +5,7 @@ import com.intellij.openapi.editor.Document
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiManager
@@ -73,6 +74,37 @@ internal fun candidatePaths(cleaned: String, rootNames: List<String>): List<Stri
         if (relative.startsWith("$name/")) candidates += relative.removePrefix("$name/")
     }
     return candidates.filter { it.isNotEmpty() }
+}
+
+/**
+ * Creates a file under the project's first content root, with any missing parent directories.
+ *
+ * Generating code into a file that does not exist yet is the normal case, not an error: a
+ * table test almost always means a new `_test.go`. Returns null when the path escapes the
+ * content root or the file cannot be created.
+ */
+fun createFile(project: Project, path: String, content: String): ResolvedFile? {
+    val relative = candidatePaths(cleanPath(path), emptyList()).lastOrNull()?.trim('/') ?: return null
+    if (relative.isEmpty() || relative.split('/').any { it == ".." }) return null
+
+    val root = ProjectRootManager.getInstance(project).contentRoots.firstOrNull() ?: return null
+    val directoryPath = relative.substringBeforeLast('/', "")
+    val fileName = relative.substringAfterLast('/')
+    if (fileName.isEmpty()) return null
+
+    return writeToDocument(project, "Create $relative") {
+        val directory = if (directoryPath.isEmpty()) {
+            root
+        } else {
+            VfsUtil.createDirectoryIfMissing(root, directoryPath)
+        } ?: return@writeToDocument null
+
+        val file = directory.findChild(fileName) ?: directory.createChildData(root, fileName)
+        VfsUtil.saveText(file, content)
+        val psiFile = PsiManager.getInstance(project).findFile(file)
+        val document = psiFile?.let { PsiDocumentManager.getInstance(project).getDocument(it) }
+        if (psiFile == null || document == null) null else ResolvedFile(file, document, psiFile)
+    }
 }
 
 /**

@@ -54,4 +54,29 @@ class GoUsagesTest : GoMcpToolTestCase() {
         loadFixture("basic")
         assertNull(find("Hexagon"))
     }
+
+    /**
+     * Go's convention is that a doc comment opens with the declared name, so counting
+     * comment mentions would report every idiomatic declaration as referenced.
+     */
+    fun `test a doc comment mentioning the symbol is not a usage`() {
+        loadFixture("basic")
+        val result = find("helper")!!
+
+        assertTrue(
+            "helper is called from nowhere; its own doc comment must not count, got " +
+                result.usages.map { "${it.kind} ${it.location} ${it.snippet}" },
+            result.usages.isEmpty(),
+        )
+    }
+
+    fun `test usages report code lines only`() {
+        loadFixture("basic")
+        val result = find("Rect.Area")!!
+
+        assertTrue(
+            "no usage should be a comment line, got ${result.usages.map { it.snippet }}",
+            result.usages.none { it.snippet.trimStart().startsWith("//") },
+        )
+    }
 }

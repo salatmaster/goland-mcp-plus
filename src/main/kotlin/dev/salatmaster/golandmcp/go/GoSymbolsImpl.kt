@@ -21,12 +21,7 @@ class GoSymbolsImpl(
 
     override fun lookup(project: Project, ref: SymbolRef): GoLookupResult = guardGoApi("lookup") {
         val scope = GlobalSearchScope.allScope(project)
-        val candidates = when (ref) {
-            is SymbolRef.Bare -> lookupByName(project, scope, ref.typeName, ref.memberName)
-            is SymbolRef.Qualified -> lookupByName(project, scope, ref.typeName, ref.memberName)
-                .filter { matchesPackage(it, ref.packagePath) }
-            is SymbolRef.AtPosition -> emptyList()
-        }
+        val candidates = candidatesFor(project, scope, ref)
 
         // Project code first: a bare name like `Rect` also matches image, cmplx and
         // windows once the Go SDK is indexed, and the stub index order is arbitrary.
@@ -65,13 +60,36 @@ class GoSymbolsImpl(
 
     private fun lookupElement(project: Project, ref: SymbolRef): GoNamedElement? {
         val scope = GlobalSearchScope.allScope(project)
-        val candidates = when (ref) {
-            is SymbolRef.Bare -> lookupByName(project, scope, ref.typeName, ref.memberName)
-            is SymbolRef.Qualified -> lookupByName(project, scope, ref.typeName, ref.memberName)
-                .filter { matchesPackage(it, ref.packagePath) }
-            is SymbolRef.AtPosition -> emptyList()
+        return candidatesFor(project, scope, ref).projectFirst(project).firstOrNull()
+    }
+
+    /**
+     * Resolves a reference, falling back for the shape `pkg.Symbol`.
+     *
+     * Two dotted segments and no slash are ambiguous: `store.User` is a package and a type
+     * just as plausibly as it is a type and a method. Reading it as `Type.Member` first keeps
+     * the common case fast, and retrying as a package qualifier is what makes the form an
+     * agent naturally writes after seeing an import resolve at all.
+     */
+    private fun candidatesFor(
+        project: Project,
+        scope: GlobalSearchScope,
+        ref: SymbolRef,
+    ): List<GoNamedElement> = when (ref) {
+        is SymbolRef.Bare -> {
+            val direct = lookupByName(project, scope, ref.typeName, ref.memberName)
+            if (direct.isNotEmpty() || ref.typeName == null) {
+                direct
+            } else {
+                lookupByName(project, scope, null, ref.memberName)
+                    .filter { matchesPackage(it, ref.typeName) }
+            }
         }
-        return candidates.projectFirst(project).firstOrNull()
+
+        is SymbolRef.Qualified -> lookupByName(project, scope, ref.typeName, ref.memberName)
+            .filter { matchesPackage(it, ref.packagePath) }
+
+        is SymbolRef.AtPosition -> emptyList()
     }
 
     /**
@@ -101,11 +119,18 @@ class GoSymbolsImpl(
     }
 
     private fun matchesPackage(element: GoNamedElement, packagePath: String): Boolean {
-        val actual = element.containingFile.getImportPath(false) ?: return false
-        if (actual == packagePath) return true
+        val file = element.containingFile as? GoFile ?: return false
+        val normalized = packagePath.removePrefix("./").trim('/')
+        if (normalized.isEmpty()) return false
+
+        val importPath = file.getImportPath(false)
         // A relative reference like ./internal/store matches by suffix.
-        val normalized = packagePath.removePrefix("./")
-        return actual.endsWith("/$normalized") || actual == normalized
+        if (importPath != null && (importPath == normalized || importPath.endsWith("/$normalized"))) {
+            return true
+        }
+        // The import path needs a resolved module and is null without one; the package clause
+        // is always there, and it is what 'store.User' names anyway.
+        return file.packageName == normalized
     }
 
     private fun describe(project: Project, element: GoNamedElement): GoSymbolInfo {

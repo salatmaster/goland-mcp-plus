@@ -36,6 +36,8 @@ object GoTestOutputParser {
 
     fun parse(stdout: String): GoTestRun {
         val outputs = LinkedHashMap<String, StringBuilder>()
+        val packageOutput = LinkedHashMap<String, StringBuilder>()
+        val failedPackages = LinkedHashSet<String>()
         val cases = LinkedHashMap<String, GoTestCase>()
         val buildErrors = mutableListOf<String>()
 
@@ -53,7 +55,22 @@ object GoTestOutputParser {
 
             val action = event.string("Action") ?: continue
             val pkg = event.string("Package").orEmpty()
-            val test = event.string("Test") ?: continue // package-level events carry no test
+
+            // Events with no Test are about the package itself, and that is where a build
+            // failure arrives. Dropping them made a package that never compiled look like a
+            // package with no tests -- a passing-looking answer to a run that never happened.
+            val test = event.string("Test")
+            if (test == null) {
+                when (action) {
+                    "output", "build-output" ->
+                        packageOutput.getOrPut(pkg) { StringBuilder() }
+                            .append(event.string("Output").orEmpty())
+
+                    "build-fail" -> failedPackages += pkg
+                    "fail" -> failedPackages += pkg
+                }
+                continue
+            }
             val key = "$pkg.$test"
 
             when (action) {
@@ -75,12 +92,22 @@ object GoTestOutputParser {
         }
 
         val all = cases.values.toList()
+
+        // A package that failed while contributing no test result did not run its tests; its
+        // own output is the compiler or toolchain message explaining why.
+        for (pkg in failedPackages) {
+            if (all.any { it.pkg == pkg }) continue
+            packageOutput[pkg]?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+                ?.lines()
+                ?.forEach { buildErrors += it.trim() }
+        }
+
         return GoTestRun(
             cases = all,
             passedCount = all.count { it.passed },
             failedCount = all.count { !it.passed && !it.skipped },
             skippedCount = all.count { it.skipped },
-            buildErrors = buildErrors,
+            buildErrors = buildErrors.filter { it.isNotEmpty() }.distinct(),
         )
     }
 

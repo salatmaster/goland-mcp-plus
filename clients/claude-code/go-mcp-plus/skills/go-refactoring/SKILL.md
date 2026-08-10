@@ -66,7 +66,9 @@ afterwards.
 
 **`go_safe_delete` refuses when references remain** and lists them, so "is this
 dead code?" is answered by trying to delete it. `testUsagesBlock` decides whether
-a use in a `_test.go` file counts as a reason to keep it.
+a use in a `_test.go` file counts as a reason to keep it. A mention in a comment is
+not a reference; the deletion takes the declaration and its doc comment, and
+nothing else in the file.
 
 **`go_move_files` updates the package clause and every importer.** Editing the
 package line by hand misses import sites in other packages every time.

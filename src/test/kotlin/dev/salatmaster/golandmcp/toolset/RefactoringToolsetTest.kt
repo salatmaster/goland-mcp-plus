@@ -100,4 +100,68 @@ class RefactoringToolsetTest : GoMcpToolTestCase() {
             error.message!!.contains("not a function"),
         )
     }
+
+    /**
+     * The case that was missing: nothing asserted a successful delete, so a pre-check that
+     * blocked every documented declaration passed the suite for weeks.
+     */
+    /**
+     * The case that was missing: nothing asserted a successful delete, so a pre-check that
+     * blocked every documented declaration passed the suite for weeks.
+     */
+    fun `test deletes a declaration nothing references`() {
+        loadFixture("basic")
+        val result = callTool { toolset.safeDelete(project, "helper", testUsagesBlock = true) }
+
+        assertTrue(
+            "helper has no callers; blockers=${result.blockingUsages.map { it.snippet }} " +
+                "hint=${result.hint}",
+            result.deleted,
+        )
+        assertTrue(result.blockingUsages.isEmpty())
+    }
+
+    fun `test deleting takes the doc comment with it`() {
+        loadFixture("basic")
+        callTool { toolset.safeDelete(project, "helper", testUsagesBlock = true) }
+
+        val after = storeSource()
+        assertFalse("the declaration should be gone, was:\n$after", after.contains("func helper()"))
+        assertFalse(
+            "its doc comment should go with it, was:\n$after",
+            after.contains("helper is unexported"),
+        )
+    }
+
+    /**
+     * The platform's safe delete, with its conflicts suppressed, removed an unrelated const,
+     * an unrelated var and an import that was still in use. A deletion must be exactly as
+     * wide as it says it is.
+     */
+    fun `test deleting touches nothing else in the file`() {
+        loadFixture("basic")
+        callTool { toolset.safeDelete(project, "helper", testUsagesBlock = true) }
+
+        val after = storeSource()
+        for (survivor in listOf(
+            "import \"time\"",
+            "const MaxUsers = 100",
+            "var DefaultName = \"anonymous\"",
+            "func NewUser(name string) *User",
+            "type User struct",
+            "type Audit struct",
+        )) {
+            assertTrue("'$survivor' must survive deleting helper, file was:\n$after", after.contains(survivor))
+        }
+    }
+
+    // No test for the out-of-project guard: a light fixture has no Go SDK, so a standard
+    // library symbol does not resolve and the test would pass for the wrong reason.
+
+    private fun storeSource(): String =
+        com.intellij.openapi.application.runReadActionBlocking {
+            com.intellij.psi.PsiManager.getInstance(project)
+                .findFile(myFixture.findFileInTempDir("store.go"))!!.text
+        }
+
 }

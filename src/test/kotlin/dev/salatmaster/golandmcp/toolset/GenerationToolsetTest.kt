@@ -69,13 +69,49 @@ class GenerationToolsetTest : GoMcpToolTestCase() {
         assertTrue(result.code.contains("tests := []struct"))
     }
 
-    fun `test reports a missing target file instead of silently dropping the code`() {
+    /**
+     * Generating a table test almost always means a `_test.go` nobody has created yet, so
+     * refusing to create it made the tool useless in its main case.
+     */
+    fun `test creates the target file when it does not exist`() {
         loadFixture("basic")
-        val result = callTool { toolset.generateTest(project, "Area", "Rect", "nosuch.go") }
+        val result = callTool { toolset.generateTest(project, "Area", "Rect", "shapes_test.go") }
+
+        assertTrue("should have written the file, hint was: ${result.hint}", result.applied)
+
+        val content = callTool { batch.readFiles(project, listOf("shapes_test.go")) }
+            .files.single().content
+        assertTrue("should join the package it sits in, was:\n$content", content.contains("package basic"))
+        assertTrue("a new test file needs testing, was:\n$content", content.contains("\"testing\""))
+        assertTrue("the generated test should be there, was:\n$content", content.contains("func TestArea("))
+    }
+
+    fun `test creates the target file in a new directory`() {
+        loadFixture("basic")
+        val result = callTool {
+            toolset.typeFromJson(project, """{"id": 1}""", "Row", "internal/store/row.go")
+        }
+
+        assertTrue("should have written the file, hint was: ${result.hint}", result.applied)
+        val content = callTool { batch.readFiles(project, listOf("internal/store/row.go")) }
+            .files.single().content
+        assertTrue(
+            "package should come from the directory name, was:\n$content",
+            content.contains("package store"),
+        )
+        assertTrue(content.contains("type Row struct"))
+    }
+
+    fun `test refuses to generate Go into a file that is not Go`() {
+        loadFixture("basic")
+        val result = callTool { toolset.generateTest(project, "Area", "Rect", "notes.txt") }
 
         assertFalse(result.applied)
         assertTrue("code should still come back, was empty", result.code.isNotEmpty())
-        assertTrue("hint should say the file was not found, was: ${result.hint}", result.hint.contains("not found"))
+        assertTrue(
+            "hint should say why, was: ${result.hint}",
+            result.hint.contains(".go file"),
+        )
     }
 
     fun `test adds a missing import`() {
@@ -138,5 +174,25 @@ class GenerationToolsetTest : GoMcpToolTestCase() {
             callTool { toolset.extractInterface(project, "User", "X", emptyList(), "") }
         }
         assertTrue(error.message!!.contains("no methods"))
+    }
+
+    /**
+     * The optimizer edits PSI and the platform may hold the document back, which reported an
+     * unchanged file while the import block had in fact been rewritten.
+     */
+    fun `test optimizing reports the imports it actually removed`() {
+        loadFixture("basic")
+        callTool { toolset.fixImports(project, "shapes.go", listOf("fmt", "strings"), optimize = false) }
+
+        val result = callTool { toolset.fixImports(project, "shapes.go", emptyList(), optimize = true) }
+        val content = callTool { batch.readFiles(project, listOf("shapes.go")) }.files.single().content
+
+        val stillThere = listOf("\"fmt\"", "\"strings\"").filter { content.contains(it) }
+        assertTrue("unused imports should be gone, file was:\n$content", stillThere.isEmpty())
+        assertTrue(
+            "the result must not claim the file is unchanged; hint was: ${result.hint}",
+            result.applied,
+        )
+        assertTrue("a change should come with a diff", result.diff.isNotEmpty())
     }
 }

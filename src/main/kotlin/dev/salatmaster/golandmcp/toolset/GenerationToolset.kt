@@ -8,6 +8,10 @@ import com.intellij.mcpserver.project
 import com.intellij.openapi.application.EDT
 import com.intellij.openapi.application.readAction
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.roots.ProjectRootManager
+import com.intellij.psi.PsiDocumentManager
+import dev.salatmaster.golandmcp.common.cleanPath
+import dev.salatmaster.golandmcp.common.createFile
 import dev.salatmaster.golandmcp.common.resolveFile
 import dev.salatmaster.golandmcp.common.unifiedDiff
 import dev.salatmaster.golandmcp.common.writeToDocument
@@ -256,8 +260,8 @@ class GenerationToolset : McpToolset {
         return if (path.isBlank()) {
             GoGeneratedCode(code, "", false, "", "Pass a path to append this test.")
         } else {
-            appendToFile(project, path, code)
-                .withSuccessHint("Remember that the file needs an import of \"testing\".")
+            appendToFile(project, path, code, importsForNewFile = listOf("testing"))
+                .withSuccessHint("If the file already existed, make sure it imports \"testing\".")
         }
     }
 
@@ -306,6 +310,11 @@ class GenerationToolset : McpToolset {
                 imports.addImport(resolved.psiFile, it, "")
             }
             optimizeTask?.run()
+            // The optimizer edits PSI and the platform may hold the document back until the
+            // command ends. Reading the document before this reported an unchanged file
+            // while the import block had in fact been rewritten.
+            PsiDocumentManager.getInstance(project)
+                .doPostponedOperationsAndUnblockDocument(resolved.document)
         }
 
         val after = resolved.document.text
@@ -331,11 +340,10 @@ class GenerationToolset : McpToolset {
         project: Project,
         path: String,
         code: String,
+        importsForNewFile: List<String> = emptyList(),
     ): GoGeneratedCode = withContext(Dispatchers.EDT) {
         val resolved = resolveFile(project, path)
-            ?: return@withContext GoGeneratedCode(
-                code, path, false, "", "File not found: $path. The code above was not written.",
-            )
+            ?: return@withContext createFileWithCode(project, path, code, importsForNewFile)
 
         val document = resolved.document
         val before = document.text
@@ -345,5 +353,89 @@ class GenerationToolset : McpToolset {
             document.setText(before + separator + code + "\n")
         }
         GoGeneratedCode(code, path, true, unifiedDiff(path, before, document.text), "")
+    }
+
+    /**
+     * Writes the generated code into a file that does not exist yet.
+     *
+     * Generating into a new file is the normal case rather than a failure: a table test
+     * almost always means a `_test.go` nobody has created. The package clause is taken from a
+     * sibling Go file so the new file joins the package it sits in, and falls back to the
+     * directory name, which is the convention Go tooling itself assumes.
+     */
+    private fun createFileWithCode(
+        project: Project,
+        path: String,
+        code: String,
+        importsForNewFile: List<String>,
+    ): GoGeneratedCode {
+        if (!path.trim().endsWith(".go")) {
+            return GoGeneratedCode(
+                code, path, false, "",
+                "Refusing to create '$path': generated Go must go in a .go file. " +
+                    "The code above was not written.",
+            )
+        }
+
+        val packageName = packageNameFor(project, path)
+            ?: return GoGeneratedCode(
+                code, path, false, "",
+                "Cannot tell which package '$path' belongs to. The code above was not written.",
+            )
+
+        val header = buildString {
+            append("package ").append(packageName).append("\n")
+            val wanted = importsForNewFile.filter { it.isNotBlank() }
+            if (wanted.isNotEmpty()) {
+                append("\n")
+                if (wanted.size == 1) {
+                    append("import \"").append(wanted.single()).append("\"\n")
+                } else {
+                    append("import (\n")
+                    wanted.forEach { append("\t\"").append(it).append("\"\n") }
+                    append(")\n")
+                }
+            }
+        }
+        val content = header + "\n" + code + "\n"
+
+        val created = createFile(project, path, content)
+            ?: return GoGeneratedCode(
+                code, path, false, "", "Could not create '$path'. The code above was not written.",
+            )
+
+        return GoGeneratedCode(
+            code = code,
+            path = path,
+            applied = true,
+            diff = unifiedDiff(path, "", created.document.text),
+            hint = "Created $path in package $packageName.",
+        )
+    }
+
+    /** The package a new file in this directory belongs to, read off a sibling Go file. */
+    private fun packageNameFor(project: Project, path: String): String? {
+        val relative = cleanPath(path).removePrefix("/")
+        val directory = relative.substringBeforeLast('/', "")
+        val siblingPackage = ProjectRootManager.getInstance(project).contentRoots
+            .asSequence()
+            .mapNotNull { root ->
+                if (directory.isEmpty()) root else root.findFileByRelativePath(directory)
+            }
+            .filter { it.isDirectory }
+            .flatMap { it.children.asSequence() }
+            .filter { !it.isDirectory && it.name.endsWith(".go") }
+            .mapNotNull { PACKAGE_CLAUSE.find(String(it.contentsToByteArray()))?.groupValues?.get(1) }
+            .firstOrNull()
+        if (siblingPackage != null) return siblingPackage
+
+        val fromDirectory = directory.substringAfterLast('/')
+            .replace('-', '_')
+            .filter { it.isLetterOrDigit() || it == '_' }
+        return fromDirectory.takeIf { it.isNotEmpty() && !it.first().isDigit() }
+    }
+
+    private companion object {
+        val PACKAGE_CLAUSE = Regex("""^\s*package\s+(\w+)""", RegexOption.MULTILINE)
     }
 }
