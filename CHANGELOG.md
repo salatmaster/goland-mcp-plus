@@ -5,6 +5,8 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-08-10
+
 No change to the tools themselves: not a line of the plugin's behaviour differs from
 0.1.2. What was broken was getting the agent to use them.
 
@@ -120,7 +122,8 @@ cannot answer. A tool filter UI would duplicate the one the IDE ships. See
 
 First release.
 
-[unreleased]: https://github.com/salatmaster/goland-mcp-plus/compare/v0.1.2...HEAD
+[unreleased]: https://github.com/salatmaster/goland-mcp-plus/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/salatmaster/goland-mcp-plus/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/salatmaster/goland-mcp-plus/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/salatmaster/goland-mcp-plus/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/salatmaster/goland-mcp-plus/releases/tag/v0.1.0
