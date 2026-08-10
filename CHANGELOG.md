@@ -5,6 +5,23 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **`go_quick_fixes` and `go_apply_quick_fix`.** The IDE knows both what is wrong and
+  how to repair it, and nothing was passing the second half on: the MCP server built
+  into the IDE reports problems with no fix attached, and gopls' diagnostics are text.
+  These list the fixes the IDE offers for a Go file — what Alt+Enter would show — and
+  apply one by name, on the undo stack, returning the diff.
+
+  A fix that needs an editor or asks something interactively is reported rather than
+  run; a name matching two problems on one line is refused with both; and a fix that
+  runs and changes nothing comes back as `applied: false` with the reason instead of as
+  success. Severity is the one the developer's profile gives it, so the agent sees what
+  the editor shows rather than a flood of hints called warnings.
+
+  This is the inspection layer, which is where fixes live. Build and type errors still
+  come from the IDE's own `get_file_problems`, which reports them but knows no fixes.
+
 ## [0.1.3] - 2026-08-10
 
 No change to the tools themselves: not a line of the plugin's behaviour differs from
