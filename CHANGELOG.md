@@ -5,6 +5,28 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+No change to the tools themselves: not a line of the plugin's behaviour differs from
+0.1.2. What was broken was getting the agent to use them.
+
+### Fixed
+
+- **Installing the skills in Codex installed nothing.** `codex plugin add` reported
+  success and delivered an empty plugin. The skills were a symlink out of the plugin
+  directory, and Codex copies that directory into its own cache rather than reading it
+  in place, so the link did not survive. One directory now holds real files for both
+  clients, and a test refuses a symlink under `plugins/`.
+
+### Changed
+
+- **Codex installs the skills the way Claude Code does**, with
+  `codex plugin marketplace add` and `codex plugin add`, rather than by copying files
+  into `~/.codex/skills` by hand. The instructions predated Codex having plugins at all.
+- The plugin description leads with what the plugin is for, and states what it needs to
+  work: the bundled MCP Server and Go plugins, and an agent connected to the IDE.
+- The five skills live in `plugins/goland-mcp-plus`. Anything pointing at the old
+  `clients/claude-code/goland-mcp-plus` path needs updating; installing through either
+  client's marketplace does not.
+
 ## [0.1.2] - 2026-08-10
 
 ### Fixed
