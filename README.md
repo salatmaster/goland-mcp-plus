@@ -1,222 +1,138 @@
-# Go MCP++
+<h1 align="center">Go MCP++</h1>
 
-**Go semantic tools for the MCP server built into GoLand.** 24 tools that answer
-questions about Go code the way the IDE answers them — through the type system,
-not through text search.
-
-> Listed as **Go MCP++** on the JetBrains Marketplace: plugin names may not contain
-> the word "GoLand". The repository keeps its original name.
-
-GoLand already exposes file reading, text search and patching over MCP. What it does
-not expose is the Go type system. So an agent cannot ask who implements an interface,
-or why a type fails to satisfy one — and Go has no `implements` keyword, so those
-answers exist nowhere in the source. They exist only inside the IDE.
+<p align="center">
+  <b>Your agent stops grepping Go and starts asking the compiler.</b><br>
+  24 Go tools for the MCP server built into GoLand.
+</p>
 
 ---
 
-## The problem it solves
+Go has no `implements` keyword. Which types satisfy an interface is written down
+nowhere — it exists only in the IDE's model. So when an agent reaches for `grep`,
+it gets answers that look right and are wrong.
 
 ```
-You:   Make Circle satisfy the Shape interface.
+You:   Make Circle satisfy Shape.
 Agent: [writes Area() and Name() on *Circle]
 Go:    cannot use circle (variable of type Circle) as Shape value:
        Circle does not implement Shape
 Agent: ...
 ```
 
-The compiler says *that* it failed, never *why*. With this plugin:
+The compiler says *that* it failed, never *why*. One tool call does:
 
-```
-Agent: go_interface_check(typeName="Circle", interfaceName="Shape")
-       → satisfied: false
-         checkedAs: "*Circle"
-         pointerReceiverOnly: ["Area", "Name"]
-         hint: "Circle declares Area, Name on a pointer receiver, so *Circle
-                satisfies Shape but Circle does not. Either use *Circle at the
-                call site, or change those methods to value receivers."
-```
+```jsonc
+go_interface_check(typeName="Circle", interfaceName="Shape")
 
-One call, an actionable answer, no guessing.
-
-The same gap runs through the whole language. `grep Close` finds forty unrelated
-methods and misses every one promoted through embedding. A signature change means
-finding every caller and getting each argument order right. Neither is a text
-problem, and treating them as one is how agents quietly break Go code.
-
----
-
-## Tools
-
-### Understanding code
-
-| Tool | Answers |
-| --- | --- |
-| `go_symbol` | What is this — signature, doc, declaration site, exported or not |
-| `go_doc` | What does it do, as the installed version declares it |
-| `go_source_of` | The declaration's actual source, including from dependencies |
-| `go_package_api` | What a package exports, with struct fields and tags |
-| `go_find_usages` | Who uses it, classified as call, read or write |
-| `go_read_files` | Several files in one round trip |
-
-### Interfaces
-
-| Tool | Answers |
-| --- | --- |
-| `go_implementations` | Which types implement this interface, and do they need a pointer |
-| `go_interfaces_of` | Which interfaces this type satisfies |
-| `go_interface_check` | Does it satisfy that interface, and if not, exactly why |
-| `go_implement_interface` | Write the methods it is missing |
-| `go_extract_interface` | Turn a concrete type's methods into an interface |
-
-### Changing code
-
-| Tool | Does |
-| --- | --- |
-| `go_change_signature` | Rename, add, drop, reorder or retype parameters and results — rewriting every call site |
-| `go_safe_delete` | Delete only if nothing references it; otherwise list what does |
-| `go_inline` | Replace calls with the body, substituting arguments |
-| `go_move_files` | Move files between packages, updating the package clause and every importer |
-| `go_fix_imports` | Add imports, drop unused ones |
-| `go_replace_lines`, `go_batch_replace_text` | Mechanical edits, batched |
-
-### Generating
-
-| Tool | Does |
-| --- | --- |
-| `go_type_from_json` | JSON sample into Go structs, with golint initialisms (`id` becomes `ID`) |
-| `go_generate_test` | Scaffold a table-driven test |
-
-### Toolchain
-
-| Tool | Does |
-| --- | --- |
-| `go_test` | Run tests, returning each failure with its own output attached |
-| `go_build_check` | Does it still compile, as `file:line: message` |
-| `go_vet` | What compiles and is still wrong |
-| `go_mod` | tidy, download, verify, why, graph |
-
-Every mutating tool runs inside a write command, so a developer reverts anything an
-agent did with one Cmd+Z.
-
-### Writing a reference
-
-Tools take references the way you would write them, not file coordinates an agent
-would have to hunt for first:
-
-```
-net/http.Client.Do      import path, type, member
-./internal/store.Store  relative package
-store.User.Save         single-segment package
-Handler.ServeHTTP       receiver and method
-ServeHTTP               bare name
+{ "satisfied": false,
+  "checkedAs": "*Circle",
+  "pointerReceiverOnly": ["Area", "Name"],
+  "hint": "Circle declares Area, Name on a pointer receiver, so *Circle satisfies
+           Shape but Circle does not. Either use *Circle at the call site, or
+           change those methods to value receivers." }
 ```
 
-Quoting, a pasted declaration (`func (c *Circle) Area() float64`) and the
-documentation form (`(*Circle).Area`) are normalised rather than rejected — those
-are the shapes models actually send.
-
----
+That gap runs through the language. `grep Close` finds forty unrelated methods and
+misses every one promoted through embedding. A signature change means finding every
+caller and getting each argument order right. Neither is a text problem.
 
 ## Install
 
-### The plugin
+**1. The plugin.** Download the zip from
+[the latest release](https://github.com/salatmaster/goland-mcp-plus/releases/latest),
+then **Settings | Plugins | ⚙ | Install Plugin from Disk**.
 
-From the JetBrains Marketplace: **Settings | Plugins | Marketplace**, search for
-**Go MCP++**.
+*(Not on the JetBrains Marketplace yet. Building from source is a contributor path —
+see [CONTRIBUTING](CONTRIBUTING.md).)*
 
-Installing, updating and removing it need **no IDE restart** — every extension point
-it uses is a dynamic one, and a test fails if that ever stops being true.
+**2. Point your agent at the IDE.** The MCP server *is* the IDE, on a port it
+computes per instance — so never write the port by hand. Open **Settings | Tools |
+MCP Server** and enable it, then:
 
-Or build it:
+| Client | How |
+| --- | --- |
+| Claude Code, Codex, Cursor and friends | pick it in the client list; the IDE writes the config and keeps the port in sync |
+| anything else | **Copy SSE Config** or **Copy Stdio Config**, paste into your client |
 
-```bash
-./gradlew buildPlugin
-```
+GoLand also raises a banner when it notices Claude or Codex start in a terminal
+without a matching setup.
 
-and install `build/distributions/*.zip` through **Settings | Plugins | ⚙ | Install
-Plugin from Disk**.
+Check it worked by asking the agent to call `go_symbol` on any type in your project.
 
-### Connecting an agent
-
-The MCP server here *is* the IDE — there is no separate process to launch, and it
-listens on a port assigned per IDE instance. Do not hand-write the port:
-
-1. **Settings | Tools | MCP Server**, enable the server.
-2. Use the client entry for your agent to configure it, or **Copy SSE Config**.
-
-### Teaching the agent to use it
-
-A connected agent still reaches for `grep` unless it knows these tools exist.
-[`clients/`](clients) carries four skills — navigation, interfaces, refactoring,
-testing — as a Claude Code plugin and as Codex skills:
+**3. Teach the agent the tools exist.** A connected agent still reaches for `grep`.
+[`clients/`](clients) ships five skills, shared by both clients:
 
 ```
+# Claude Code
 /plugin marketplace add salatmaster/goland-mcp-plus
-/plugin install go-mcp-plus@go-mcp-plus
+/plugin install goland-mcp-plus@goland-mcp-plus
+
+# Codex
+cp -R skills/* ~/.codex/skills/
 ```
 
-See [clients/README.md](clients/README.md) for Codex and for what the skills contain.
+For any other agent, the same guidance in one page: paste
+[`clients/claude-code/CLAUDE.md`](clients/claude-code/CLAUDE.md) into whatever
+always-in-context rules file it has.
 
----
+## Tools
+
+**Understand** — `go_symbol` · `go_doc` · `go_source_of` · `go_package_api` ·
+`go_find_usages` · `go_read_files`
+
+> Resolve a symbol through the type system, read what the *installed* version of a
+> dependency declares, list a package's API with struct tags, find callers
+> classified as call, read or write.
+
+**Interfaces** — `go_interface_check` · `go_implementations` · `go_interfaces_of` ·
+`go_implement_interface` · `go_extract_interface`
+
+> Who implements this, which interfaces a type satisfies, why it does not, and the
+> stubs to fix it — including the pointer-receiver trap the compiler will not
+> distinguish for you.
+
+**Change** — `go_change_signature` · `go_safe_delete` · `go_inline` ·
+`go_move_files` · `go_fix_imports` · `go_replace_lines` · `go_batch_replace_text`
+
+> Rename, add, drop, reorder or retype parameters and rewrite every call site.
+> Delete only what nothing references. Move files between packages, updating every
+> importer. Every change lands on the IDE's undo stack — one Cmd+Z reverts an agent.
+
+**Generate** — `go_type_from_json` · `go_generate_test`
+
+> JSON into Go structs with golint initialisms (`id` → `ID`). Table-driven test
+> scaffolding, creating the `_test.go` if it does not exist.
+
+**Toolchain** — `go_test` · `go_build_check` · `go_vet` · `go_mod`
+
+> Run the toolchain with the SDK the project is configured with, and get each
+> failure with its own output instead of a log to re-read.
+
+References are written the way you would say them — `net/http.Client.Do`,
+`store.User.Save`, `Handler.ServeHTTP`, or a bare name. A pasted declaration and
+the `(*Circle).Area` documentation form work too.
 
 ## Requirements
 
-- GoLand 2026.2 or later (build 262+)
-- The bundled MCP Server plugin, enabled
-- The bundled Go plugin
+GoLand 2026.2 or later, with the bundled MCP Server and Go plugins enabled.
 
-The plugin builds on the Go plugin's internal API, which carries no compatibility
-guarantees. Rather than pin an upper bound — which would make the plugin
-uninstallable the moment you update the IDE — a guard turns an incompatible API
-into an ordinary tool error naming the IDE build, so a bug report says what broke.
+There is no upper version bound: pinning one would make the plugin uninstallable
+the day you update the IDE. Instead, an incompatible Go API surfaces as an ordinary
+tool error naming the build, so a bug report says what broke.
 
----
+## No telemetry
 
-## Deliberate omissions
+**Settings | Tools | Go MCP++** shows how the agent used the tools this session —
+calls, failures, cancellations, average duration. In memory only, never written to
+disk, never transmitted. A tool at zero calls usually means the agent was never told
+it exists.
 
-**No `go_extract_function`.** The IDE's extract-function handler needs an `Editor`
-and then puts up an inplace naming template, which nothing can answer from a tool
-call. Driving it would mean hijacking the editor selection of whoever is sitting at
-the keyboard. The alternative — splicing text ourselves — silently gets captured
-variables wrong, which is worse than the tool not existing.
+## Also worth knowing
 
-**No tool filter UI.** The IDE already ships one at **Settings | Tools | MCP Server
-| MCP Tool Filter**, and these tools appear in it. A second switch for the same
-thing is only a way for the two to disagree.
+`go_extract_function` is deliberately absent: the IDE's handler needs an editor and
+an inplace naming template that a tool call cannot answer, and the text-splicing
+alternative gets captured variables wrong. A tool that is sometimes wrong is worse
+than no tool.
 
-**No telemetry.** **Settings | Tools | Go MCP++** shows how the agent has used the
-tools this session — calls, failures, cancellations, average duration. It is held
-in memory, never written to disk, and never transmitted. A tool sitting at zero
-calls usually means the agent was never told it exists.
-
----
-
-## Development
-
-```bash
-./gradlew test                    # 156 tests, no Go SDK required
-./gradlew verifyPluginStructure
-./gradlew buildPlugin
-```
-
-Tests run against a light in-memory fixture, so the suite needs no Go toolchain.
-
-Four architectural rules the suite enforces, each of them a bug that already
-happened once:
-
-- **Toolsets never import `com.goide.*`.** All Go PSI access goes through the `go`
-  package, so a GoLand upgrade breaks one layer instead of every tool.
-- **Tools return `@Serializable` classes with properties.** A bare `List<T>` compiles
-  and then fails at runtime inside the MCP schema generator.
-- **No default parameter values on tools.** With one, a mis-spelled argument name
-  silently uses the default instead of failing.
-- **Every tool records its usage.** A tool added without it makes the usage table
-  quietly under-report rather than fail.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the layout and the conventions.
-
----
-
-## License
-
-[Apache-2.0](LICENSE)
+[Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) ·
+[Security](SECURITY.md) · [Apache-2.0](LICENSE)
