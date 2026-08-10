@@ -88,11 +88,23 @@ object GoTypeFromJson {
     private fun exportedName(key: String): String =
         key.split('_', '-', ' ')
             .filter { it.isNotEmpty() }
-            .joinToString("") { part ->
-                val upper = part.uppercase()
-                if (upper in INITIALISMS) upper else part.replaceFirstChar { it.uppercaseChar() }
-            }
+            .joinToString("") { part -> capitalizeSegment(part) }
             .ifEmpty { "Field" }
+
+    /**
+     * Capitalises one underscore-separated segment the way golint would.
+     *
+     * A plural initialism keeps its lowercase `s`: `photo_urls` is `PhotoURLs`, not
+     * `PhotoUrls`, which is what a bare set lookup produced.
+     */
+    private fun capitalizeSegment(part: String): String {
+        val upper = part.uppercase()
+        if (upper in INITIALISMS) return upper
+        if (upper.length > 1 && upper.endsWith("S") && upper.dropLast(1) in INITIALISMS) {
+            return upper.dropLast(1) + "s"
+        }
+        return part.replaceFirstChar { it.uppercaseChar() }
+    }
 
     /** The set golint recognises. */
     private val INITIALISMS = setOf(

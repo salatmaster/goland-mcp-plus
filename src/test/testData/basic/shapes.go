@@ -41,3 +41,6 @@ type Namer interface {
 type Sizer interface {
 	Size() int
 }
+
+// Anything declares no methods, so every type in the module satisfies it.
+type Anything interface{}

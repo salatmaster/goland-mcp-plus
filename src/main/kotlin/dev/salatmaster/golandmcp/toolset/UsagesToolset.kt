@@ -36,6 +36,8 @@ data class GoFindUsagesResult(
 
 class UsagesToolset : McpToolset {
 
+    private val facts = dev.salatmaster.golandmcp.go.GoInterfaceFactsImpl()
+
     private val usages = GoUsagesImpl()
 
     @McpTool
@@ -88,6 +90,12 @@ class UsagesToolset : McpToolset {
             )
         }
 
+        // A method called through an interface does not reference the concrete declaration,
+        // so it cannot appear here. Left unsaid, `callCount: 0, truncated: false` reads as
+        // "nothing calls this" -- which, with go_safe_delete next in the chain, is a path to
+        // deleting live code.
+        val dispatchNote = interfaceDispatchNote(project, ref, limit)
+
         // Writes are called out separately because they are the sites a signature or
         // semantics change is most likely to break.
         return GoFindUsagesResult(
@@ -96,11 +104,50 @@ class UsagesToolset : McpToolset {
             callCount = entries.count { it.kind == "CALL" },
             writeCount = entries.count { it.kind == "WRITE" },
             truncated = result.truncated,
-            hint = if (result.truncated) {
-                "Stopped at $limit usages; more exist. Raise limit to see the rest."
-            } else {
-                ""
-            },
+            hint = listOf(
+                if (result.truncated) {
+                    "Stopped at $limit usages; more exist. Raise limit to see the rest."
+                } else {
+                    ""
+                },
+                dispatchNote,
+            ).filter { it.isNotEmpty() }.joinToString(" "),
         )
+    }
+
+    /**
+     * What this search cannot see, said out loud.
+     *
+     * Find Usages resolves references to the declaration, and a call written against an
+     * interface references the interface method, not the concrete one. The IDE behaves the
+     * same way, but there a human sees the scope; here the caller sees a number.
+     */
+    private suspend fun interfaceDispatchNote(
+        project: Project,
+        ref: dev.salatmaster.golandmcp.common.SymbolRef,
+        limit: Int,
+    ): String {
+        val owner = when (ref) {
+            is dev.salatmaster.golandmcp.common.SymbolRef.Bare -> ref.typeName
+            is dev.salatmaster.golandmcp.common.SymbolRef.Qualified -> ref.typeName
+            else -> null
+        } ?: return ""
+
+        val ownerRef = when (ref) {
+            is dev.salatmaster.golandmcp.common.SymbolRef.Qualified ->
+                dev.salatmaster.golandmcp.common.SymbolRef.Qualified(ref.packagePath, null, owner)
+            else -> dev.salatmaster.golandmcp.common.SymbolRef.Bare(null, owner)
+        }
+
+        val satisfied = readAction { facts.interfacesOf(project, ownerRef, limit) }?.items.orEmpty()
+        val base = "Only references to the concrete method are counted; a call made through " +
+            "an interface resolves to the interface method and does not appear here."
+
+        return if (satisfied.isEmpty()) {
+            base
+        } else {
+            "$base $owner satisfies ${satisfied.joinToString(", ") { it.reference }}, so a " +
+                "call through any of those is not included."
+        }
     }
 }

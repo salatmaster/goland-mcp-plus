@@ -17,7 +17,10 @@ class HarnessSmokeTest : GoMcpToolTestCase() {
             (psi as GoFile).types.mapNotNull { it.name }.sorted()
         }
 
-        assertEquals(listOf("Circle", "Namer", "Rect", "Shape", "Sizer", "Triangle"), typeNames)
+        assertEquals(
+            listOf("Anything", "Circle", "Namer", "Rect", "Shape", "Sizer", "Triangle"),
+            typeNames,
+        )
     }
 
     fun `test methods resolve with their receivers`() {

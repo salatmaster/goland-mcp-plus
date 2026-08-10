@@ -80,4 +80,35 @@ class GoSymbolsTest : GoMcpToolTestCase() {
         assertTrue(result is GoLookupResult.Found)
         assertEquals("Area", (result as GoLookupResult.Found).symbol.name)
     }
+
+    /**
+     * `var` and `const` live in neither the type nor the function index, so every tool built
+     * on this lookup used to answer "no such symbol" for an ordinary package-level error
+     * value — while go_package_api listed it.
+     */
+    fun `test resolves a package level var`() {
+        loadFixture("basic")
+        val result = runReadAction { symbols.lookup(project, parseSymbolRef("DefaultName")) }
+
+        val found = result as GoLookupResult.Found
+        assertEquals("DefaultName", found.symbol.name)
+        assertTrue(
+            "should point at the declaration, was ${found.symbol.location}",
+            found.symbol.location.contains("store.go"),
+        )
+    }
+
+    fun `test resolves a package level const`() {
+        loadFixture("basic")
+        val result = runReadAction { symbols.lookup(project, parseSymbolRef("MaxUsers")) }
+
+        assertEquals("MaxUsers", (result as GoLookupResult.Found).symbol.name)
+    }
+
+    fun `test resolves a const through its package`() {
+        loadFixture("basic")
+        val result = runReadAction { symbols.lookup(project, parseSymbolRef("basic.MaxUsers")) }
+
+        assertEquals("MaxUsers", (result as GoLookupResult.Found).symbol.name)
+    }
 }

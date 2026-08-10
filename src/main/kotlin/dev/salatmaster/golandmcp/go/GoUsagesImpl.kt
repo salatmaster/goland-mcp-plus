@@ -67,7 +67,7 @@ class GoUsagesImpl(
         )
 
         GoUsagesResult(
-            target = target.qualifiedName.ifEmpty { target.name },
+            target = target.reference.ifEmpty { target.name },
             usages = collected,
             truncated = overflow,
         )
