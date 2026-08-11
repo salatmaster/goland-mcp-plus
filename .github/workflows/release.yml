@@ -66,6 +66,23 @@ jobs:
           PLUGIN_VERSION: ${{ inputs.version }}
         run: ./gradlew test verifyPluginStructure --no-daemon
 
+      # The rule was written down twice -- in the notes and in verify-plugin.yml's own
+      # header -- and lived in neither pipeline, so 0.2.0 shipped a call to an API
+      # scheduled for removal and the Marketplace found it instead of us. It runs here
+      # rather than on every push because it downloads whole IDEs, and here is where it
+      # pays: nothing is committed, tagged or published after it.
+      - name: Verify against the recommended IDEs
+        env:
+          PLUGIN_VERSION: ${{ inputs.version }}
+        run: ./gradlew verifyPlugin --no-daemon
+
+      - name: Upload the verification report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verifier-report
+          path: build/reports/pluginVerifier
+
       - name: Build the plugin
         env:
           PLUGIN_VERSION: ${{ inputs.version }}
