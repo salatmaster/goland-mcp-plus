@@ -5,6 +5,13 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`go_quick_fixes` called an API scheduled for removal.** The five-argument
+  `InspectionEngine.inspectEx` is deprecated, and the tool would have stopped working on
+  the IDE that drops it; it now uses the supported overload. Nothing changes for a
+  caller — the plugin simply survives that release.
+
 ## [0.2.0] - 2026-08-10
 
 ### Added
