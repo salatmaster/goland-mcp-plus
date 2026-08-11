@@ -5,6 +5,15 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **The archive attached to the GitHub release is signed.** It never was. `buildPlugin` does
+  not sign even with the key in the environment — signing happens inside the step that
+  publishes to the Marketplace, which runs after the release has already been created. So
+  every version through 0.2.3 offered a signed plugin on the Marketplace and an unsigned one
+  on GitHub under the same version number. Both are the same archive now, and the asset is
+  named `-signed.zip`, so which one it is can be told without downloading it.
+
 ## [0.2.3] - 2026-08-11
 
 ### Fixed

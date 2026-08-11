@@ -6,7 +6,8 @@ plugins {
     id("org.jetbrains.kotlin.plugin.serialization") version "2.3.10"
     id("org.jetbrains.intellij.platform") version "2.18.1"
     // Applied only to render one changelog section into <change-notes>. The file itself is
-    // cut by .github/scripts/cut-changelog.sh; this plugin's patchChangelog is never run.
+    // cut by .github/scripts/cut-changelog.sh, and the plugin's own patchChangelog is
+    // disabled below so it cannot cut it a second way.
     id("org.jetbrains.changelog") version "2.5.0"
 }
 
@@ -49,6 +50,16 @@ kotlin { jvmToolchain(25) }
 changelog {
     version = project.version.toString()
 }
+
+// Applying the changelog plugin also puts patchChangelog into publishPlugin's task graph,
+// and it is not theoretical: it ran during the 0.2.3 release. That task rewrites
+// CHANGELOG.md, a tracked file, in the middle of publishing. It did no harm only because
+// the workflow commits the changelog before it publishes, so the rewrite was thrown away
+// with the runner -- but a failure inside it would fail publishPlugin after the tag and the
+// GitHub release already exist, which is the one outcome the order of the release steps is
+// built to prevent. Cutting the changelog belongs to .github/scripts/cut-changelog.sh, and
+// to nothing else.
+tasks.named("patchChangelog") { enabled = false }
 
 intellijPlatform {
     // The one settings page this plugin contributes is a read-only usage table with nothing
