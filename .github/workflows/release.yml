@@ -120,6 +120,27 @@ jobs:
             --generate-notes \
             build/distributions/*.zip
 
+      # An update to a signed plugin must itself be signed, and the Marketplace refuses
+      # the upload if it is not -- after the tag and the GitHub release already exist. If
+      # the key ever goes missing, this says so before anything is published rather than
+      # leaving a release the Marketplace will not take.
+      - name: Refuse to publish unsigned
+        if: ${{ vars.PUBLISH_TO_MARKETPLACE == 'true' }}
+        env:
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
+          PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
+        run: |
+          missing=""
+          [ -n "$PRIVATE_KEY" ] || missing="$missing PRIVATE_KEY"
+          [ -n "$CERTIFICATE_CHAIN" ] || missing="$missing CERTIFICATE_CHAIN"
+          [ -n "$PRIVATE_KEY_PASSWORD" ] || missing="$missing PRIVATE_KEY_PASSWORD"
+          if [ -n "$missing" ]; then
+            echo "PUBLISH_TO_MARKETPLACE is on, but signing is not configured:$missing" >&2
+            echo "Publishing unsigned would be refused, since earlier versions are signed." >&2
+            exit 1
+          fi
+
       # A separate, deliberate step: a bad release on the Marketplace cannot be
       # withdrawn as easily as a tag, so releasing alone never publishes there.
       - name: Publish to the JetBrains Marketplace
