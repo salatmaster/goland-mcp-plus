@@ -1,9 +1,13 @@
+import org.jetbrains.changelog.Changelog
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 
 plugins {
     id("org.jetbrains.kotlin.jvm") version "2.3.10"
     id("org.jetbrains.kotlin.plugin.serialization") version "2.3.10"
     id("org.jetbrains.intellij.platform") version "2.18.1"
+    // Applied only to render one changelog section into <change-notes>. The file itself is
+    // cut by .github/scripts/cut-changelog.sh; this plugin's patchChangelog is never run.
+    id("org.jetbrains.changelog") version "2.5.0"
 }
 
 group = "io.github.salatmaster"
@@ -39,6 +43,13 @@ dependencies {
 // missing or mis-resolved platform APIs.
 kotlin { jvmToolchain(25) }
 
+// Read-only use of the changelog, and the version has to be told to it explicitly: the
+// extension defaults to the project version, which is only ever right by coincidence here,
+// since ours comes from an environment variable the workflow sets.
+changelog {
+    version = project.version.toString()
+}
+
 intellijPlatform {
     // The one settings page this plugin contributes is a read-only usage table with nothing
     // to search for, and building searchable options launches a headless IDE for about a
@@ -63,6 +74,23 @@ intellijPlatform {
     }
 
     pluginConfiguration {
+        // <change-notes> is what the Marketplace shows as "What's new" for a version, and
+        // what the Plugins dialog shows when it offers an update. It was never set, so every
+        // release through 0.2.2 published a blank one.
+        //
+        // The section read is the one for the version being built, not [Unreleased]: the
+        // release workflow cuts the changelog before it builds, so by then the entry has
+        // already moved under its own version heading and [Unreleased] is empty. That is why
+        // the changelog plugin's own convention, which wires change notes to [Unreleased], is
+        // not used. The fallback is for a local build of a version the changelog has not
+        // heard of, which is every local build.
+        changeNotes = provider {
+            with(changelog) {
+                val item = getOrNull(project.version.toString()) ?: getUnreleased()
+                renderItem(item.withHeader(false).withEmptySections(false), Changelog.OutputType.HTML)
+            }
+        }
+
         ideaVersion {
             sinceBuild = "262"
             // No until-build: pinning it would make the plugin uninstallable the moment
