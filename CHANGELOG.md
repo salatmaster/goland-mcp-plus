@@ -13,6 +13,12 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   version being released. Only future versions can gain it: the Marketplace does not allow
   the notes of an update to be edited once it has been submitted.
 
+### Changed
+
+- **Release notes on GitHub quote the changelog** instead of listing merged pull request
+  titles, which recorded what landed rather than what changed for anyone installing the
+  plugin. The notes of the seven releases already published were rewritten the same way.
+
 ## [0.2.2] - 2026-08-11
 
 ### Changed

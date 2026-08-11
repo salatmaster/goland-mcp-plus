@@ -115,9 +115,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ inputs.version }}
         run: |
+          # Notes come from the changelog rather than from --generate-notes. A list of merged
+          # pull request titles records what landed, not what changed for someone installing
+          # the plugin, and it appends a "New Contributors" block that says nothing on a
+          # single-author repository. The section exists by now because the cut ran first, and
+          # the script fails on a missing or empty one, so a release cannot quietly ship notes
+          # that say nothing.
+          .github/scripts/release-notes.sh "$VERSION" > "$RUNNER_TEMP/release-notes.md"
+
           gh release create "v$VERSION" \
             --title "v$VERSION" \
-            --generate-notes \
+            --notes-file "$RUNNER_TEMP/release-notes.md" \
             build/distributions/*.zip
 
       # An update to a signed plugin must itself be signed, and the Marketplace refuses
