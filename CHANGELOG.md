@@ -5,6 +5,13 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **Releases are signed.** Every version from here carries a signature the IDE and the
+  Marketplace can verify, and the release refuses to publish when the signing key is
+  missing — an update to a signed plugin must itself be signed, and learning that at
+  upload time means learning it after the tag exists. Nothing about the tools changes.
+
 ## [0.2.1] - 2026-08-11
 
 ### Fixed
