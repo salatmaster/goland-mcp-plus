@@ -1,11 +1,9 @@
 package dev.salatmaster.golandmcp.go
 
 import com.goide.psi.GoFile
-import com.intellij.codeInspection.InspectionManager
 import com.intellij.codeInspection.LocalQuickFix
 import com.intellij.codeInspection.ProblemDescriptor
 import com.intellij.codeInspection.ProblemHighlightType
-import com.intellij.codeInspection.ex.InspectionToolWrapper
 import com.intellij.codeInspection.ex.LocalInspectionToolWrapper
 import com.intellij.codeInspection.InspectionEngine
 import com.intellij.codeInsight.daemon.HighlightDisplayKey
@@ -13,6 +11,7 @@ import com.intellij.openapi.progress.EmptyProgressIndicator
 import com.intellij.openapi.project.Project
 import com.intellij.profile.codeInspection.InspectionProjectProfileManager
 import com.intellij.psi.PsiDocumentManager
+import com.intellij.util.PairProcessor
 import dev.salatmaster.golandmcp.common.resolveFile
 import dev.salatmaster.golandmcp.common.unifiedDiff
 import dev.salatmaster.golandmcp.common.writeToDocument
@@ -115,17 +114,24 @@ class GoInspectionsImpl : GoInspections {
         val profile = InspectionProjectProfileManager.getInstance(project).currentProfile
         val wrappers: List<LocalInspectionToolWrapper> = profile.getAllEnabledInspectionTools(project)
             .filter { it.isEnabled }
-            .mapNotNull { it.tool as? InspectionToolWrapper<*, *> as? LocalInspectionToolWrapper }
+            .mapNotNull { it.tool as? LocalInspectionToolWrapper }
 
+        // The five-argument overload is deprecated and scheduled for removal; the verifier
+        // reports it, and a release that ships it breaks the day the platform drops it.
         val results = InspectionEngine.inspectEx(
             wrappers,
             psiFile,
-            InspectionManager.getInstance(project),
-            false,
+            psiFile.textRange,
+            psiFile.textRange,
+            false, // not on the fly: this is a tool call, not a typing session
+            false, // injected fragments are somebody else's language
+            true, // honour //nolint-style suppressions, as the editor does
             EmptyProgressIndicator(),
+            PairProcessor.alwaysTrue(),
         )
 
-        return results.entries.flatMap { (inspection, descriptors) ->
+        return results.entries.flatMap { (wrapper, descriptors) ->
+            val inspection = wrapper.shortName
             // The severity the developer configured, not the one the descriptor carries.
             // Half of GoLand's inspections hand out GENERIC_ERROR_OR_WARNING and are shown
             // in the editor as a hint or not at all -- reading the descriptor called every
