@@ -5,6 +5,9 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+- Added plugin logo
+
 ### Fixed
 
 - **The archive attached to the GitHub release is signed.** It never was. `buildPlugin` does
