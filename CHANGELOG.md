@@ -5,6 +5,15 @@ follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- **`go_quick_fixes` and `go_apply_quick_fix` no longer call an API deprecated in
+  2026.3.** Every public overload of `InspectionEngine.inspectEx` takes a
+  `ProgressIndicator`, and all of them are deprecated from 263; the one that replaces them
+  is internal and does not exist in 2026.2. The tools now go through
+  `InspectionEngine.runInspectionOnFile`, which is public in both. Nothing changes for a
+  caller.
+
 ## [0.2.4] - 2026-08-12
 
 ### Added

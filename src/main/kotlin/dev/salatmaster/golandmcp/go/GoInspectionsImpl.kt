@@ -1,17 +1,18 @@
 package dev.salatmaster.golandmcp.go
 
 import com.goide.psi.GoFile
+import com.intellij.codeInspection.InspectionManager
 import com.intellij.codeInspection.LocalQuickFix
 import com.intellij.codeInspection.ProblemDescriptor
 import com.intellij.codeInspection.ProblemHighlightType
+import com.intellij.codeInspection.ex.GlobalInspectionContextBase
 import com.intellij.codeInspection.ex.LocalInspectionToolWrapper
 import com.intellij.codeInspection.InspectionEngine
 import com.intellij.codeInsight.daemon.HighlightDisplayKey
-import com.intellij.openapi.progress.EmptyProgressIndicator
 import com.intellij.openapi.project.Project
 import com.intellij.profile.codeInspection.InspectionProjectProfileManager
 import com.intellij.psi.PsiDocumentManager
-import com.intellij.util.PairProcessor
+import com.intellij.psi.util.PsiTreeUtil
 import dev.salatmaster.golandmcp.common.resolveFile
 import dev.salatmaster.golandmcp.common.unifiedDiff
 import dev.salatmaster.golandmcp.common.writeToDocument
@@ -116,19 +117,29 @@ class GoInspectionsImpl : GoInspections {
             .filter { it.isEnabled }
             .mapNotNull { it.tool as? LocalInspectionToolWrapper }
 
-        // The five-argument overload is deprecated and scheduled for removal; the verifier
-        // reports it, and a release that ships it breaks the day the platform drops it.
-        val results = InspectionEngine.inspectEx(
-            wrappers,
-            psiFile,
-            psiFile.textRange,
-            psiFile.textRange,
-            false, // not on the fly: this is a tool call, not a typing session
-            false, // injected fragments are somebody else's language
-            true, // honour //nolint-style suppressions, as the editor does
-            EmptyProgressIndicator(),
-            PairProcessor.alwaysTrue(),
+        // Not InspectionEngine.inspectEx: every public overload of it takes a ProgressIndicator
+        // and is deprecated from 263, and the overload that replaces it is internal and absent
+        // from 262. runInspectionOnFile is public in both and makes the same inspectEx call
+        // inside, with the flags this tool wants: not on the fly, injected fragments left to
+        // their own language, //nolint-style suppressions honoured as the editor does.
+        //
+        // It takes one inspection at a time and walks the whole file for each, even for an
+        // inspection of another language, so the profile is cut down first to what can apply
+        // here. Otherwise every CSS and SQL inspection would cost a full pass.
+        val dialects = InspectionEngine.calcElementDialectIds(
+            PsiTreeUtil.collectElements(psiFile) { true }.asList(),
+            emptyList(),
         )
+        val applicable = InspectionEngine.filterToolsApplicableByLanguage(wrappers, dialects, dialects)
+
+        val context = InspectionManager.getInstance(project).createNewGlobalContext()
+        val results = try {
+            applicable.associateWith { InspectionEngine.runInspectionOnFile(psiFile, it, context) }
+        } finally {
+            // close, not cleanup: createNewGlobalContext registers the context with the
+            // project, and only close takes it off again. Without it every call would leak one.
+            (context as? GlobalInspectionContextBase)?.close(true) ?: context.cleanup()
+        }
 
         return results.entries.flatMap { (wrapper, descriptors) ->
             val inspection = wrapper.shortName
